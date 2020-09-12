@@ -5,13 +5,31 @@ table! {
 }
 
 table! {
-    data_entries (address, key) {
+    blocks_microblocks (id) {
+        uid -> BigInt,
+        id -> Varchar,
+        height -> Int4,
+        time_stamp -> Nullable<BigInt>,
+    }
+}
+
+table! {
+    data_entries_uid_seq (last_value) {
+        last_value -> BigInt,
+    }
+}
+
+table! {
+    data_entries (superseded_by, address, key) {
+        block_uid -> BigInt,
+        transaction_id -> Varchar,
+        uid -> BigInt,
+        superseded_by -> BigInt,
         address -> Varchar,
         key -> Varchar,
-        height -> Int4,
         value_binary -> Nullable<Binary>,
         value_bool -> Nullable<Bool>,
-        value_integer -> Nullable<Int8>,
+        value_integer -> Nullable<BigInt>,
         value_string -> Nullable<Varchar>,
         fragment_0_integer -> Nullable<Int4>,
         fragment_0_string -> Nullable<Varchar>,

@@ -8,14 +8,14 @@ pub enum Error {
     InvalidMessage(String),
     InvalidBase58String(bs58::decode::Error),
     DbError(diesel::result::Error),
-    ConnectionPoolError(r2d2::Error),
+    ConnectionError(diesel::ConnectionError),
 }
 
 use Error::*;
 
-impl From<r2d2::Error> for Error {
-    fn from(v: r2d2::Error) -> Self {
-        ConnectionPoolError(v)
+impl From<diesel::ConnectionError> for Error {
+    fn from(v: diesel::ConnectionError) -> Self {
+        ConnectionError(v)
     }
 }
 
@@ -58,7 +58,7 @@ impl Display for Error {
             InvalidMessage(message) => write!(f, "InvalidMessage: {}", message),
             InvalidBase58String(err) => write!(f, "InvalidBase58String: {}", err),
             DbError(err) => write!(f, "DbError: {}", err),
-            ConnectionPoolError(err) => write!(f, "ConnectionPoolError: {}", err),
+            ConnectionError(err) => write!(f, "ConnectionError: {}", err),
         }
     }
 }
