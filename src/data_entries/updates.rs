@@ -1,6 +1,6 @@
 use super::{
     BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdateWithHeight, DataEntriesSource,
-    DataEntry, FRAGMENT_SEPARATOR, RE,
+    DataEntry,
 };
 use crate::error::Error;
 use crate::log::APP_LOG;
@@ -30,11 +30,6 @@ impl DataEntriesSourceImpl {
             grpc_client: BlockchainUpdatesApiClient::connect(blockchain_updates_url.to_owned())
                 .await?,
         })
-    }
-
-    fn is_suitable_for_index(&self, key: &str) -> bool {
-        key.split(FRAGMENT_SEPARATOR)
-            .fold(true, |acc, fr| acc && RE.is_match(fr))
     }
 }
 
@@ -79,9 +74,6 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                     .flat_map::<HashSet<DataEntry>, _>(|(idx, su)| {
                         su.data_entries
                             .iter()
-                            .filter(|de| {
-                                self.is_suitable_for_index(&de.data_entry.as_ref().unwrap().key)
-                            })
                             .map(|de| {
                                 let deu = de.data_entry.as_ref().unwrap();
 
