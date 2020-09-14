@@ -47,8 +47,7 @@ pub struct DataEntry {
 
 impl PartialEq for DataEntry {
     fn eq(&self, other: &DataEntry) -> bool {
-        (&self.address, &self.key, &self.transaction_id)
-            == (&other.address, &other.key, &other.transaction_id)
+        (&self.address, &self.key) == (&other.address, &other.key)
     }
 }
 
@@ -58,7 +57,6 @@ impl Hash for DataEntry {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.address.hash(state);
         self.key.hash(state);
-        self.transaction_id.hash(state);
     }
 }
 
@@ -101,10 +99,25 @@ pub struct InsertableDataEntry {
     pub fragment_10_string: Option<String>,
 }
 
+impl PartialEq for InsertableDataEntry {
+    fn eq(&self, other: &InsertableDataEntry) -> bool {
+        (&self.address, &self.key) == (&other.address, &other.key)
+    }
+}
+
+impl Eq for InsertableDataEntry {}
+
+impl Hash for InsertableDataEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.address.hash(state);
+        self.key.hash(state);
+    }
+}
+
 #[derive(Clone, Debug, Insertable)]
 #[table_name = "data_entries"]
 pub struct DataEntryUpdate {
-    pub uid: i64,
+    pub superseded_by: i64,
     pub address: String,
     pub key: String,
 }
@@ -163,7 +176,7 @@ pub trait DataEntriesRepo {
 
     fn get_total_block_id(&mut self) -> Result<Option<String>, Error>;
 
-    fn get_last_update_uid(&mut self) -> Result<i64, Error>;
+    fn get_next_update_uid(&mut self) -> Result<i64, Error>;
 
     fn insert_blocks_or_microblocks(
         &mut self,
@@ -176,7 +189,7 @@ pub trait DataEntriesRepo {
 
     fn reopen_superseded_by(&mut self, current_superseded_by: &i64) -> Result<(), Error>;
 
-    fn set_last_update_uid(&mut self, uid: i64) -> Result<(), Error>;
+    fn set_next_update_uid(&mut self, uid: i64) -> Result<(), Error>;
 
     fn change_block_id(&mut self, block_uid: &i64, new_block_id: &str) -> Result<(), Error>;
 

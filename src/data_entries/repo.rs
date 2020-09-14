@@ -80,7 +80,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::DbError(err))
     }
 
-    fn get_last_update_uid(&mut self) -> Result<i64, Error> {
+    fn get_next_update_uid(&mut self) -> Result<i64, Error> {
         data_entries_uid_seq
             .select(data_entries_uid_seq::last_value)
             .first(&self.conn as &PgConnection)
@@ -121,9 +121,10 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .into_iter()
             .try_for_each::<_, Result<(), Error>>(|upd| {
                 diesel::update(data_entries::table)
-                    .set(data_entries::uid.eq(upd.uid))
+                    .set(data_entries::superseded_by.eq(upd.superseded_by))
                     .filter(data_entries::address.eq(&upd.address))
                     .filter(data_entries::key.eq(&upd.key))
+                    .filter(data_entries::superseded_by.eq(MAX_UID))
                     .execute(&self.conn as &PgConnection)
                     .map(|_| ())
                     .map_err(|err| Error::DbError(err))
@@ -139,7 +140,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::DbError(err))
     }
 
-    fn set_last_update_uid(&mut self, new_uid: i64) -> Result<(), Error> {
+    fn set_next_update_uid(&mut self, new_uid: i64) -> Result<(), Error> {
         diesel::sql_query(format!(
             "alter sequence data_entries_uid_seq restart with {};",
             new_uid
