@@ -9,10 +9,6 @@ fn default_pgport() -> u16 {
     5432
 }
 
-fn default_pgpool() -> u8 {
-    4
-}
-
 fn default_blocks_per_request() -> usize {
     256
 }
@@ -33,8 +29,6 @@ struct ConfigFlat {
     pub pgdatabase: String,
     pub pguser: String,
     pub pgpassword: String,
-    #[serde(default = "default_pgpool")]
-    pub pgpool: u8,
 
     pub blockchain_updates_url: String,
     #[serde(default = "default_blocks_per_request")]
@@ -57,7 +51,6 @@ pub struct PostgresConfig {
     pub database: String,
     pub user: String,
     pub password: String,
-    pub pool_size: u8,
 }
 
 pub fn load() -> Result<Config, Error> {
@@ -76,7 +69,6 @@ pub fn load() -> Result<Config, Error> {
             database: config_flat.pgdatabase,
             user: config_flat.pguser,
             password: config_flat.pgpassword,
-            pool_size: config_flat.pgpool,
         },
     })
 }
@@ -100,6 +92,5 @@ pub(crate) mod tests {
         database: "marketmaking".to_owned(),
         password: "postgres".to_owned(),
         user: "postgres".to_owned(),
-        pool_size: 2,
     });
 }

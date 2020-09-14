@@ -6,20 +6,10 @@ use super::{
 use crate::error::Error;
 use crate::log::APP_LOG;
 use itertools::Itertools;
-use slog::{error, info};
+use slog::info;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-
-/*
-Algorithm:
-1. Get last height from db
-2. Request a batch of T block updates from last_height
-3. Transform updates into rows for insertion
-4. Insert updates
-5. Upadte last handled height in db
-5. If less than T updates have been received, sleep for some time before continuing
-*/
 
 enum UpdatesItem {
     Blocks(Vec<BlockMicroblockAppend>),
@@ -38,9 +28,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
     min_height: u32,
     blocks_per_request: usize,
 ) -> Result<(), Error> {
-    let mut result = Ok(());
-
-    while let Ok(_) = result {
+    loop {
         let last_handled_height = dbw.get_last_handled_height()?;
 
         let from_height = if last_handled_height < min_height {
@@ -66,7 +54,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
 
         let last_updated_height = updates_with_height.height;
 
-        result = dbw.transaction(|conn| {
+        dbw.transaction(|conn| {
             let dbw = Arc::new(Mutex::new(DataEntriesRepoImpl::new(conn.clone())));
 
             updates_with_height
@@ -101,7 +89,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
                     }
                 })
                 .into_iter()
-                // rewrite to handle error on each update processing
+                // todo: rewrite to handle error on each update processing
                 .fold(Ok(()), |_, update_item| match update_item {
                     UpdatesItem::Blocks(bs) => {
                         squash_microblocks(dbw.clone())?;
@@ -134,11 +122,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
             }
 
             Ok(())
-        });
+        })?;
     }
-
-    error!(APP_LOG, "{:?}", result);
-    result
 }
 
 fn extract_string_fragment(fragments: &Vec<&str>, position: usize) -> Option<String> {
@@ -221,7 +206,6 @@ fn append_data_entries<U: DataEntriesRepo>(
             let frs: Vec<&str> = key
                 .split(FRAGMENT_SEPARATOR)
                 .into_iter()
-                // unwrap will be guarantly safe cause it was preliminarily filtered by suitability
                 .filter_map(|fr| {
                     RE.captures(fr)
                         .map(|caps| caps.get(1).map(|m| m.as_str()))?

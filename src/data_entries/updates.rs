@@ -94,7 +94,15 @@ impl DataEntriesSource for DataEntriesSourceImpl {
 
                                 DataEntry {
                                     address: bs58::encode(&de.address).into_string(),
-                                    key: de.data_entry.as_ref().unwrap().key.clone(),
+                                    // nul symbol is badly processed at least by PostgreSQL
+                                    // so escape this for safety
+                                    key: de
+                                        .data_entry
+                                        .as_ref()
+                                        .unwrap()
+                                        .key
+                                        .clone()
+                                        .replace("\0", "\\0"),
                                     transaction_id: bs58::encode(
                                         &transaction_ids.get(idx).unwrap(),
                                     )

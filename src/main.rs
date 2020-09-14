@@ -10,7 +10,7 @@ pub mod schema;
 
 use data_entries::{repo::DataEntriesRepoImpl, updates::DataEntriesSourceImpl};
 use log::APP_LOG;
-use slog::info;
+use slog::{info, error};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -36,6 +36,7 @@ async fn main() -> Result<(), error::Error> {
     )
     .await
     {
+        error!(APP_LOG, "{}", err);
         panic!(err);
     }
 
