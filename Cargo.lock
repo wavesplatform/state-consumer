@@ -984,8 +984,10 @@ dependencies = [
 name = "state-daemon"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base64 0.12.3",
  "bs58",
+ "chrono",
  "diesel",
  "envy",
  "itertools 0.9.0",

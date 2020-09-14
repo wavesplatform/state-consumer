@@ -7,10 +7,8 @@ use crate::schema::data_entries_uid_seq;
 use crate::schema::data_entries_uid_seq::dsl::*;
 use crate::schema::last_handled_height;
 use crate::schema::last_handled_height::dsl::*;
-use crate::APP_LOG;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use slog::info;
 use std::sync::Arc;
 
 const MAX_UID: i64 = std::i64::MAX - 1;
