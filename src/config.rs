@@ -72,25 +72,3 @@ pub fn load() -> Result<Config, Error> {
         },
     })
 }
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use super::PostgresConfig;
-    use crate::data_entries;
-    use once_cell::sync::Lazy;
-
-    pub static DATA_ENTRIES_STAGENET: Lazy<data_entries::Config> =
-        Lazy::new(|| data_entries::Config {
-            blockchain_updates_url: "https://blockchain-updates-stagenet.waves.exchange".to_owned(),
-            blocks_per_request: 256,
-            starting_height: 0,
-        });
-
-    pub static POSTGRES_LOCAL: Lazy<PostgresConfig> = Lazy::new(|| PostgresConfig {
-        host: "localhost".to_owned(),
-        port: 5432,
-        database: "marketmaking".to_owned(),
-        password: "postgres".to_owned(),
-        user: "postgres".to_owned(),
-    });
-}

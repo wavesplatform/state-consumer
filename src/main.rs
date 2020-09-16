@@ -10,8 +10,8 @@ pub mod schema;
 
 use data_entries::{repo::DataEntriesRepoImpl, updates::DataEntriesSourceImpl};
 use log::APP_LOG;
-use slog::{info, error};
-use std::sync::Arc;
+use slog::info;
+use std::sync::{Arc, Mutex};
 
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
@@ -19,7 +19,7 @@ async fn main() -> Result<(), error::Error> {
 
     let conn = Arc::new(db::new(&config.postgres)?);
 
-    let data_entries_repo = Arc::new(DataEntriesRepoImpl::new(conn));
+    let data_entries_repo = Arc::new(Mutex::new(DataEntriesRepoImpl::new(conn)));
 
     let updates_repo =
         DataEntriesSourceImpl::new(&config.data_entries.blockchain_updates_url).await?;
@@ -36,7 +36,6 @@ async fn main() -> Result<(), error::Error> {
     )
     .await
     {
-        error!(APP_LOG, "{}", err);
         panic!(err);
     }
 

@@ -1,7 +1,7 @@
 use super::{
     repo::DataEntriesRepoImpl, BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate,
     DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, InsertableDataEntry,
-    FRAGMENT_SEPARATOR, INTEGER_SEPARATOR, RE, STRING_SEPARATOR,
+    FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
 use crate::error::Error;
 use crate::log::APP_LOG;
@@ -24,38 +24,38 @@ struct BlockUidWithDataEntry {
 
 pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
     updates_src: T,
-    dbw: Arc<U>,
+    dbw: Arc<Mutex<U>>,
     min_height: u32,
     blocks_per_request: usize,
 ) -> Result<(), Error> {
     loop {
-        let last_handled_height = dbw.get_last_handled_height()?;
+        let last_handled_height = dbw
+            .try_lock()
+            .unwrap()
+            .get_last_handled_height()?
+            .unwrap_or(1) as u32;
 
         let from_height = if last_handled_height < min_height {
             min_height
         } else {
-            last_handled_height + 1
+            last_handled_height
         };
-        let to_height = from_height + (blocks_per_request as u32) - 1;
 
         info!(
             APP_LOG,
-            "updating data entries from {} to {}", from_height, to_height
+            "Fetching data entries updates from height {}", from_height
         );
-
+        let max_duration = Duration::from_secs(5);
         let mut start = Instant::now();
-        let updates_with_height = updates_src.fetch_updates(from_height, to_height).await?;
-        info!(
-            APP_LOG,
-            "updates were received in {} secs",
-            start.elapsed().as_secs()
-        );
-        start = Instant::now();
+        let updates_with_height = updates_src
+            .fetch_updates(from_height, blocks_per_request, max_duration)
+            .await?;
 
-        let last_updated_height = updates_with_height.height;
-
-        dbw.transaction(|conn| {
+        dbw.try_lock().unwrap().transaction(|conn| {
             let dbw = Arc::new(Mutex::new(DataEntriesRepoImpl::new(conn.clone())));
+            dbw.try_lock().unwrap().delete_last_block()?;
+
+            start = Instant::now();
 
             updates_with_height
                 .updates
@@ -89,8 +89,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
                     }
                 })
                 .into_iter()
-                // todo: rewrite to handle error on each update processing
-                .fold(Ok(()), |_, update_item| match update_item {
+                .try_fold((), |_, update_item| match update_item {
                     UpdatesItem::Blocks(bs) => {
                         squash_microblocks(dbw.clone())?;
                         append_blocks_or_microblocks(dbw.clone(), bs.as_ref())
@@ -107,39 +106,36 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
 
             info!(
                 APP_LOG,
-                "updates were processed in {} secs",
+                "Updates were processed in {} secs",
                 start.elapsed().as_secs()
             );
 
-            dbw.lock()
-                .unwrap()
-                .set_last_handled_height(last_updated_height)?;
+            info!(
+                APP_LOG,
+                "Last updated height {}", updates_with_height.last_height
+            );
 
-            info!(APP_LOG, "last updated height: {}", last_updated_height);
-
-            if to_height > last_updated_height {
-                std::thread::sleep(Duration::from_secs(5));
-            }
+            std::thread::sleep(Duration::from_secs(1));
 
             Ok(())
         })?;
     }
 }
 
-fn extract_string_fragment(fragments: &Vec<&str>, position: usize) -> Option<String> {
-    fragments.get(position).map_or(None, |fr| {
-        if fr.starts_with(STRING_SEPARATOR) {
-            Some(fr.trim_start_matches(STRING_SEPARATOR).to_owned())
+fn extract_string_fragment(values: &Vec<(String, String)>, position: usize) -> Option<String> {
+    values.get(position).map_or(None, |(t, v)| {
+        if t == STRING_DESCRIPTOR {
+            Some(v.to_owned())
         } else {
             None
         }
     })
 }
 
-fn extract_integer_fragment(fragments: &Vec<&str>, position: usize) -> Option<i32> {
-    fragments.get(position).map_or(None, |fr| {
-        if fr.starts_with(INTEGER_SEPARATOR) {
-            fr.trim_start_matches(INTEGER_SEPARATOR).parse().ok()
+fn extract_integer_fragment(values: &Vec<(String, String)>, position: usize) -> Option<i32> {
+    values.get(position).map_or(None, |(t, v)| {
+        if t == INTEGER_DESCRIPTOR {
+            v.parse().ok()
         } else {
             None
         }
@@ -203,12 +199,20 @@ fn append_data_entries<U: DataEntriesRepo>(
             },
         )| {
             let key = &data_entry.key;
-            let frs: Vec<&str> = key
-                .split(FRAGMENT_SEPARATOR)
-                .into_iter()
-                .filter_map(|fr| {
-                    RE.captures(fr)
-                        .map(|caps| caps.get(1).map(|m| m.as_str()))?
+            let mut frs = key.split(FRAGMENT_SEPARATOR).into_iter();
+
+            let types = frs
+                .next()
+                .map(|ts| ts.split("").into_iter().collect_vec())
+                .unwrap_or(vec![]);
+            let values = frs
+                .enumerate()
+                .filter_map(|(idx, fragment)| {
+                    types
+                        .clone()
+                        .into_iter()
+                        .nth(idx)
+                        .map(|t| (t.to_owned(), fragment.to_owned()))
                 })
                 .collect();
 
@@ -223,28 +227,28 @@ fn append_data_entries<U: DataEntriesRepo>(
                 value_bool: data_entry.value_bool,
                 value_integer: data_entry.value_integer,
                 value_string: data_entry.value_string.clone(),
-                fragment_0_integer: extract_integer_fragment(&frs, 0),
-                fragment_0_string: extract_string_fragment(&frs, 0),
-                fragment_1_integer: extract_integer_fragment(&frs, 1),
-                fragment_1_string: extract_string_fragment(&frs, 1),
-                fragment_2_integer: extract_integer_fragment(&frs, 2),
-                fragment_2_string: extract_string_fragment(&frs, 2),
-                fragment_3_integer: extract_integer_fragment(&frs, 3),
-                fragment_3_string: extract_string_fragment(&frs, 3),
-                fragment_4_integer: extract_integer_fragment(&frs, 4),
-                fragment_4_string: extract_string_fragment(&frs, 4),
-                fragment_5_integer: extract_integer_fragment(&frs, 5),
-                fragment_5_string: extract_string_fragment(&frs, 5),
-                fragment_6_integer: extract_integer_fragment(&frs, 6),
-                fragment_6_string: extract_string_fragment(&frs, 6),
-                fragment_7_integer: extract_integer_fragment(&frs, 7),
-                fragment_7_string: extract_string_fragment(&frs, 7),
-                fragment_8_integer: extract_integer_fragment(&frs, 8),
-                fragment_8_string: extract_string_fragment(&frs, 8),
-                fragment_9_integer: extract_integer_fragment(&frs, 9),
-                fragment_9_string: extract_string_fragment(&frs, 9),
-                fragment_10_integer: extract_integer_fragment(&frs, 10),
-                fragment_10_string: extract_string_fragment(&frs, 10),
+                fragment_0_integer: extract_integer_fragment(&values, 0),
+                fragment_0_string: extract_string_fragment(&values, 0),
+                fragment_1_integer: extract_integer_fragment(&values, 1),
+                fragment_1_string: extract_string_fragment(&values, 1),
+                fragment_2_integer: extract_integer_fragment(&values, 2),
+                fragment_2_string: extract_string_fragment(&values, 2),
+                fragment_3_integer: extract_integer_fragment(&values, 3),
+                fragment_3_string: extract_string_fragment(&values, 3),
+                fragment_4_integer: extract_integer_fragment(&values, 4),
+                fragment_4_string: extract_string_fragment(&values, 4),
+                fragment_5_integer: extract_integer_fragment(&values, 5),
+                fragment_5_string: extract_string_fragment(&values, 5),
+                fragment_6_integer: extract_integer_fragment(&values, 6),
+                fragment_6_string: extract_string_fragment(&values, 6),
+                fragment_7_integer: extract_integer_fragment(&values, 7),
+                fragment_7_string: extract_string_fragment(&values, 7),
+                fragment_8_integer: extract_integer_fragment(&values, 8),
+                fragment_8_string: extract_string_fragment(&values, 8),
+                fragment_9_integer: extract_integer_fragment(&values, 9),
+                fragment_9_string: extract_string_fragment(&values, 9),
+                fragment_10_integer: extract_integer_fragment(&values, 10),
+                fragment_10_string: extract_string_fragment(&values, 10),
             }
         },
     );

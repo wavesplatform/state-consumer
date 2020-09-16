@@ -7,25 +7,15 @@ use crate::schema::blocks_microblocks;
 use crate::schema::data_entries;
 use async_trait::async_trait;
 use diesel::sql_types::{BigInt, Nullable, Text};
-use diesel::PgConnection;
-use diesel::{Insertable, QueryableByName};
-use once_cell::sync::Lazy;
-use regex::Regex;
+use diesel::{Insertable, PgConnection, QueryableByName};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::time::Duration;
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
-pub const STRING_SEPARATOR: &str = "$";
-pub const INTEGER_SEPARATOR: &str = "#";
-
-pub static RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(&format!(
-        r"^(\{0}\w*|{1}-?[0-9]+)$",
-        STRING_SEPARATOR, INTEGER_SEPARATOR
-    ))
-    .unwrap()
-});
+pub const STRING_DESCRIPTOR: &str = "$";
+pub const INTEGER_DESCRIPTOR: &str = "#";
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -127,16 +117,17 @@ pub trait DataEntriesSource {
     async fn fetch_updates(
         &self,
         from_height: u32,
-        to_height: u32,
-    ) -> Result<BlockchainUpdateWithHeight, Error>;
+        batch_max_size: usize,
+        batch_max_time: Duration,
+    ) -> Result<BlockchainUpdatesWithLastHeight, Error>;
 }
 
-#[derive(Clone, Debug, Insertable)]
+#[derive(Clone, Debug, Insertable, QueryableByName)]
 #[table_name = "blocks_microblocks"]
 pub struct BlockMicroblock {
-    id: String,
-    time_stamp: Option<i64>,
-    height: i32,
+    pub id: String,
+    pub time_stamp: Option<i64>,
+    pub height: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -155,8 +146,8 @@ pub enum BlockchainUpdate {
 }
 
 #[derive(Debug)]
-pub struct BlockchainUpdateWithHeight {
-    pub height: u32,
+pub struct BlockchainUpdatesWithLastHeight {
+    pub last_height: u32,
     pub updates: Vec<BlockchainUpdate>,
 }
 
@@ -166,9 +157,7 @@ pub trait DataEntriesRepo {
         f: impl FnOnce(Arc<PgConnection>) -> Result<(), Error>,
     ) -> Result<(), Error>;
 
-    fn get_last_handled_height(&self) -> Result<u32, Error>;
-
-    fn set_last_handled_height(&mut self, new_height: u32) -> Result<(), Error>;
+    fn get_last_handled_height(&self) -> Result<Option<i32>, Error>;
 
     fn get_block_uid(&mut self, block_id: &str) -> Result<i64, Error>;
 
@@ -196,6 +185,8 @@ pub trait DataEntriesRepo {
     fn update_data_entries_block_references(&mut self, block_uid: &i64) -> Result<(), Error>;
 
     fn delete_microblocks(&mut self) -> Result<(), Error>;
+
+    fn delete_last_block(&mut self) -> Result<Option<i32>, Error>;
 
     fn rollback_blocks_microblocks(&mut self, block_uid: &i64) -> Result<(), Error>;
 

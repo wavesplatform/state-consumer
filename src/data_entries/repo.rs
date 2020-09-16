@@ -5,9 +5,8 @@ use crate::schema::blocks_microblocks::dsl::*;
 use crate::schema::data_entries;
 use crate::schema::data_entries_uid_seq;
 use crate::schema::data_entries_uid_seq::dsl::*;
-use crate::schema::last_handled_height;
-use crate::schema::last_handled_height::dsl::*;
 use diesel::prelude::*;
+use diesel::sql_types::{Array, BigInt, VarChar};
 use diesel::PgConnection;
 use std::sync::Arc;
 
@@ -37,19 +36,11 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f(self.conn.clone()))
     }
 
-    fn get_last_handled_height(&self) -> Result<u32, Error> {
-        last_handled_height
-            .select(last_handled_height::height)
-            .first::<i32>(&self.conn as &PgConnection as &PgConnection)
-            .map(|h| h as u32)
-            .map_err(|err| Error::DbError(err))
-    }
-
-    fn set_last_handled_height(&mut self, h: u32) -> Result<(), Error> {
-        diesel::update(last_handled_height::table)
-            .set(last_handled_height::height.eq(h as i32))
-            .execute(&self.conn as &PgConnection)
-            .map(|_| ())
+    fn get_last_handled_height(&self) -> Result<Option<i32>, Error> {
+        blocks_microblocks
+            .select(diesel::expression::sql_literal::sql("max(height)"))
+            .get_result::<i32>(&self.conn as &PgConnection)
+            .optional()
             .map_err(|err| Error::DbError(err))
     }
 
@@ -63,10 +54,10 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
 
     fn get_key_block_uid(&mut self) -> Result<Option<i64>, Error> {
         blocks_microblocks
-            .select(diesel::dsl::max(blocks_microblocks::uid))
+            .select(diesel::expression::sql_literal::sql("max(uid)"))
             .filter(blocks_microblocks::time_stamp.is_null())
-            .order(blocks_microblocks::uid.desc())
-            .first(&self.conn as &PgConnection)
+            .get_result(&self.conn as &PgConnection)
+            .optional()
             .map_err(|err| Error::DbError(err))
     }
 
@@ -107,7 +98,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .to_owned()
             .chunks(chunk_size)
             .into_iter()
-            .fold(Ok(()), |_, chunk| {
+            .try_fold((), |_, chunk| {
                 diesel::insert_into(data_entries::table)
                     .values(chunk)
                     .execute(&self.conn as &PgConnection)
@@ -117,18 +108,23 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
     }
 
     fn close_superseded_by(&mut self, updates: &Vec<DataEntryUpdate>) -> Result<(), Error> {
-        updates
-            .into_iter()
-            .try_for_each::<_, Result<(), Error>>(|upd| {
-                diesel::update(data_entries::table)
-                    .set(data_entries::superseded_by.eq(upd.superseded_by))
-                    .filter(data_entries::address.eq(&upd.address))
-                    .filter(data_entries::key.eq(&upd.key))
-                    .filter(data_entries::superseded_by.eq(MAX_UID))
-                    .execute(&self.conn as &PgConnection)
-                    .map(|_| ())
-                    .map_err(|err| Error::DbError(err))
-            })
+        let mut addresses = vec![];
+        let mut keys = vec![];
+        let mut superseded_bys = vec![];
+        updates.iter().for_each(|u| {
+            addresses.push(&u.address);
+            keys.push(&u.key);
+            superseded_bys.push(&u.superseded_by);
+        });
+
+        diesel::sql_query("UPDATE data_entries SET superseded_by = updates.superseded_by FROM (SELECT UNNEST($1) as address, UNNEST($2) as key, UNNEST($3) as superseded_by) as updates where data_entries.address = updates.address and data_entries.key = updates.key and data_entries.superseded_by = $4")
+                .bind::<Array<VarChar>, _>(addresses)
+                .bind::<Array<VarChar>, _>(keys)
+                .bind::<Array<BigInt>, _>(superseded_bys)
+                .bind::<BigInt, _>(MAX_UID)
+            .execute(&self.conn as &PgConnection)
+            .map(|_| ())
+            .map_err(|err| Error::DbError(err))
     }
 
     fn reopen_superseded_by(&mut self, current_superseded_by: &i64) -> Result<(), Error> {
@@ -142,7 +138,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
 
     fn set_next_update_uid(&mut self, new_uid: i64) -> Result<(), Error> {
         diesel::sql_query(format!(
-            "alter sequence data_entries_uid_seq restart with {};",
+            "select setval('data_entries_uid_seq', {}, false);", // 3rd param - is called; in case of true, value'll be incremented before returning
             new_uid
         ))
         .execute(&self.conn as &PgConnection)
@@ -176,6 +172,16 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::DbError(err))
     }
 
+    fn delete_last_block(&mut self) -> Result<Option<i32>, Error> {
+        diesel::delete(blocks_microblocks.filter(blocks_microblocks::height.eq(
+            diesel::expression::sql_literal::sql("(select max(height) from blocks_microblocks)"),
+        )))
+        .returning(blocks_microblocks::height)
+        .get_result(&self.conn as &PgConnection)
+        .optional()
+        .map_err(|err| Error::DbError(err))
+    }
+
     fn rollback_blocks_microblocks(&mut self, block_uid: &i64) -> Result<(), Error> {
         diesel::delete(blocks_microblocks::table)
             .filter(blocks_microblocks::uid.gt(block_uid))
@@ -192,83 +198,3 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::DbError(err))
     }
 }
-
-// #[cfg(test)]
-// pub(crate) mod tests {
-//     use super::*;
-//     use crate::{
-//         data_entries::{BalancesRepo, UsdnBalanceUpdate},
-//         db::tests::PG_POOL_LOCAL,
-//     };
-//     use chrono::{Duration, NaiveDateTime};
-//     use once_cell::sync::Lazy;
-
-//     pub static REPO: Lazy<BalancesRepoImpl> =
-//         Lazy::new(|| BalancesRepoImpl::new(PG_POOL_LOCAL.clone()));
-
-//     #[test]
-//     fn last_handled_height_on_empty_db() {
-//         reset_pg();
-//         let last_handled_height_on_empty = REPO.get_last_handled_height().unwrap();
-//         assert_eq!(last_handled_height_on_empty, 0);
-//         reset_pg();
-//     }
-
-//     #[test]
-//     fn set_and_get_last_handled_height() {
-//         reset_pg();
-//         REPO.clone().set_last_handled_height(100).unwrap();
-//         let h = REPO.get_last_handled_height().unwrap();
-//         assert_eq!(h, 100);
-//         reset_pg();
-//     }
-
-//     #[test]
-//     fn insert_updates() {
-//         reset_pg();
-
-//         // 1 Jan 2020
-//         let time = NaiveDateTime::from_timestamp(1577836800, 0);
-
-//         let updates = vec![
-//             UsdnBalanceUpdate {
-//                 address: "address1".to_owned(),
-//                 timestamp: time,
-//                 balance: 995.5,
-//                 origin_transaction_id: "tx1".to_owned(),
-//                 height: 1,
-//             },
-//             UsdnBalanceUpdate {
-//                 address: "address2".to_owned(),
-//                 timestamp: time + Duration::seconds(5),
-//                 balance: 201.4,
-//                 origin_transaction_id: "tx2".to_owned(),
-//                 height: 2,
-//             },
-//         ];
-
-//         REPO.clone().insert_updates(&updates).unwrap();
-
-//         let h = REPO.get_last_handled_height().unwrap();
-//         assert_eq!(h, 2);
-
-//         reset_pg()
-//     }
-
-//     #[test]
-//     fn joins_addresses_correctly() {
-//         let addresses = vec![
-//             String::from("qwe"),
-//             String::from("asd"),
-//             String::from("zxc"),
-//         ];
-//         let joined = join_addresses(&addresses);
-//         assert_eq!(joined, "'qwe','asd','zxc'".to_owned());
-//     }
-
-//     fn reset_pg() {
-//         diesel::sql_query("truncate usdn_balance_updates restart identity;")
-//             .execute(&PG_POOL_LOCAL.get().unwrap())
-//             .unwrap();
-//     }
-// }

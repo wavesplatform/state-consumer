@@ -1,20 +1,22 @@
 use super::{
-    BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdateWithHeight, DataEntriesSource,
+    BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdatesWithLastHeight, DataEntriesSource,
     DataEntry,
 };
 use crate::error::Error;
-use crate::log::APP_LOG;
 use async_trait::async_trait;
-use slog::info;
 use std::collections::HashSet;
+use std::convert::TryFrom;
+use std::time::{Duration, Instant};
 use waves_protobuf_schemas::waves::{
     data_transaction_data::data_entry::Value,
     events::{
         blockchain_updated::append::{BlockAppend, Body, MicroBlockAppend},
         blockchain_updated::Append,
         blockchain_updated::Update,
-        grpc::blockchain_updates_api_client::BlockchainUpdatesApiClient,
-        grpc::GetBlockUpdatesRangeRequest,
+        grpc::{
+            blockchain_updates_api_client::BlockchainUpdatesApiClient, SubscribeEvent,
+            SubscribeRequest,
+        },
         BlockchainUpdated,
     },
 };
@@ -38,35 +40,74 @@ impl DataEntriesSource for DataEntriesSourceImpl {
     async fn fetch_updates(
         &self,
         from_height: u32,
-        to_height: u32,
-    ) -> Result<BlockchainUpdateWithHeight, Error> {
-        let request = tonic::Request::new(GetBlockUpdatesRangeRequest {
+        batch_max_size: usize,
+        batch_max_wait_time: Duration,
+    ) -> Result<BlockchainUpdatesWithLastHeight, Error> {
+        let request = tonic::Request::new(SubscribeRequest {
             from_height: from_height as i32,
-            to_height: to_height as i32,
+            to_height: 0,
         });
 
-        let updates: Vec<BlockchainUpdated> = self
+        let mut stream: tonic::Streaming<SubscribeEvent> = self
             .grpc_client
             .clone()
-            .get_block_updates_range(request)
+            .subscribe(request)
             .await?
-            .into_inner()
-            .updates;
+            .into_inner();
 
         let mut result = vec![];
-
         let mut last_height = from_height;
 
-        info!(APP_LOG, "processing {:?} updates", updates.len());
+        let now = Instant::now();
+        let mut should_receive_more = true;
+        while should_receive_more {
+            match stream.message().await? {
+                Some(SubscribeEvent {
+                    update: Some(update),
+                }) => {
+                    last_height = update.height as u32;
+                    match BlockchainUpdate::try_from(update) {
+                        Ok(upd) => {
+                            result.push(upd.clone());
+                            match upd {
+                                BlockchainUpdate::Block(_) => {
+                                    if result.len() >= batch_max_size
+                                        || now.elapsed().ge(&batch_max_wait_time)
+                                    {
+                                        should_receive_more = false;
+                                    }
+                                }
+                                BlockchainUpdate::Microblock(_) | BlockchainUpdate::Rollback(_) => {
+                                    should_receive_more = false
+                                }
+                            }
+                        }
+                        Err(_) => {}
+                    }
+                }
+                _ => {}
+            }
+        }
 
-        updates.iter().for_each(|u| match &u.update {
+        Ok(BlockchainUpdatesWithLastHeight {
+            last_height: last_height,
+            updates: result,
+        })
+    }
+}
+
+impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
+    type Error = Error;
+
+    fn try_from(value: BlockchainUpdated) -> Result<Self, Self::Error> {
+        match value.update {
             Some(Update::Append(Append {
                 body,
                 transaction_ids,
                 transaction_state_updates,
                 ..
             })) => {
-                let height = u.height;
+                let height = value.height;
 
                 let data_entries: HashSet<DataEntry> = transaction_state_updates
                     .iter()
@@ -119,84 +160,34 @@ impl DataEntriesSource for DataEntriesSourceImpl {
 
                 match body {
                     Some(Body::Block(BlockAppend { block, .. })) => {
-                        result.push(BlockchainUpdate::Block(BlockMicroblockAppend {
-                            id: bs58::encode(&u.id).into_string(),
+                        Ok(BlockchainUpdate::Block(BlockMicroblockAppend {
+                            id: bs58::encode(&value.id).into_string(),
                             time_stamp: block
                                 .clone()
                                 .map(|b| b.header.map(|h| Some(h.timestamp)).unwrap_or(None))
                                 .unwrap_or(None),
                             height: height as u32,
                             data_entries: data_entries,
-                        }));
+                        }))
                     }
                     Some(Body::MicroBlock(MicroBlockAppend { micro_block, .. })) => {
-                        result.push(BlockchainUpdate::Microblock(BlockMicroblockAppend {
+                        Ok(BlockchainUpdate::Microblock(BlockMicroblockAppend {
                             id: bs58::encode(&micro_block.as_ref().unwrap().total_block_id)
                                 .into_string(),
                             time_stamp: None,
                             height: height as u32,
                             data_entries: data_entries,
-                        }));
+                        }))
                     }
-                    None => {}
+                    _ => Err(Error::InvalidMessage("Append body is empty.".to_string())),
                 }
             }
-            Some(Update::Rollback(_)) => result.push(BlockchainUpdate::Rollback(
-                bs58::encode(&u.id).into_string(),
+            Some(Update::Rollback(_)) => Ok(BlockchainUpdate::Rollback(
+                bs58::encode(&value.id).into_string(),
             )),
-            _ => {}
-        });
-
-        match updates.iter().last() {
-            Some(u) => last_height = u.height as u32,
-            None => (),
+            _ => Err(Error::InvalidMessage(
+                "Unknown blockchain update case.".to_string(),
+            )),
         }
-
-        Ok(BlockchainUpdateWithHeight {
-            height: last_height,
-            updates: result,
-        })
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::DataEntriesSourceImpl;
-//     use crate::data_entries::DataEntriesSource;
-//     use crate::config::tests::BALANCES_STAGENET;
-
-//     #[tokio::test]
-//     async fn empty_block_range() {
-//         let r = DataEntriesSourceImpl::new(
-//             &BALANCES_STAGENET.blockchain_updates_url,
-//         )
-//         .await
-//         .unwrap();
-
-//         let updates = r.fetch_updates(1, 2).await.unwrap();
-
-//         assert!(updates.is_empty());
-//     }
-
-//     #[tokio::test]
-//     async fn usdn_updates_fetched_and_decoded() {
-//         let height_with_usdn_transactions = 390882;
-
-//         let r = BalancesSourceImpl::new(
-//             &BALANCES_STAGENET.blockchain_updates_url,
-//             &BALANCES_STAGENET.usdn_asset_id,
-//         )
-//         .await
-//         .unwrap();
-
-//         let updates = r
-//             .fetch_updates(
-//                 height_with_usdn_transactions,
-//                 height_with_usdn_transactions + 1,
-//             )
-//             .await
-//             .unwrap();
-
-//         assert_eq!(updates.len(), 6);
-//     }
-// }

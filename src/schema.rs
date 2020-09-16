@@ -1,10 +1,4 @@
 table! {
-    last_handled_height (height) {
-        height -> Int4,
-    }
-}
-
-table! {
     blocks_microblocks (id) {
         uid -> BigInt,
         id -> Varchar,
