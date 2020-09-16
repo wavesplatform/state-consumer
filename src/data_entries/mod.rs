@@ -20,7 +20,8 @@ pub const INTEGER_DESCRIPTOR: &str = "#";
 #[derive(Debug, Clone)]
 pub struct Config {
     pub blockchain_updates_url: String,
-    pub blocks_per_request: usize,
+    pub updates_per_request: usize,
+    pub max_wait_time_in_secs: u64,
     pub starting_height: u32,
 }
 

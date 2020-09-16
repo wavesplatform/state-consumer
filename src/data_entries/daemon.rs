@@ -26,7 +26,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
     updates_src: T,
     dbw: Arc<Mutex<U>>,
     min_height: u32,
-    blocks_per_request: usize,
+    updates_per_request: usize,
+    max_wait_time_in_secs: u64,
 ) -> Result<(), Error> {
     loop {
         let last_handled_height = dbw
@@ -45,10 +46,10 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
             APP_LOG,
             "Fetching data entries updates from height {}", from_height
         );
-        let max_duration = Duration::from_secs(5);
+        let max_duration = Duration::from_secs(max_wait_time_in_secs);
         let mut start = Instant::now();
         let updates_with_height = updates_src
-            .fetch_updates(from_height, blocks_per_request, max_duration)
+            .fetch_updates(from_height, updates_per_request, max_duration)
             .await?;
 
         dbw.try_lock().unwrap().transaction(|conn| {

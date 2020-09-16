@@ -9,8 +9,12 @@ fn default_pgport() -> u16 {
     5432
 }
 
-fn default_blocks_per_request() -> usize {
+fn default_updates_per_request() -> usize {
     256
+}
+
+fn default_max_wait_time_in_secs() -> u64 {
+    5
 }
 
 fn default_starting_height() -> u32 {
@@ -31,8 +35,10 @@ struct ConfigFlat {
     pub pgpassword: String,
 
     pub blockchain_updates_url: String,
-    #[serde(default = "default_blocks_per_request")]
-    pub blocks_per_request: usize,
+    #[serde(default = "default_updates_per_request")]
+    pub updates_per_request: usize,
+    #[serde(default = "default_max_wait_time_in_secs")]
+    pub max_wait_time_in_secs: u64,
     #[serde(default = "default_starting_height")]
     pub starting_height: u32,
 }
@@ -60,7 +66,8 @@ pub fn load() -> Result<Config, Error> {
         port: config_flat.port,
         data_entries: data_entries::Config {
             blockchain_updates_url: config_flat.blockchain_updates_url,
-            blocks_per_request: config_flat.blocks_per_request,
+            updates_per_request: config_flat.updates_per_request,
+            max_wait_time_in_secs: config_flat.max_wait_time_in_secs,
             starting_height: config_flat.starting_height,
         },
         postgres: PostgresConfig {

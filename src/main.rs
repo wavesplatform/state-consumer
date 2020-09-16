@@ -25,14 +25,13 @@ async fn main() -> Result<(), error::Error> {
         DataEntriesSourceImpl::new(&config.data_entries.blockchain_updates_url).await?;
 
     info!(APP_LOG, "Starting data_entries daemon");
-    let starting_height = config.data_entries.starting_height.clone();
-    let blocks_per_request = config.data_entries.blocks_per_request.clone();
 
     if let Err(err) = data_entries::daemon::start(
         updates_repo,
-        data_entries_repo.clone(),
-        starting_height,
-        blocks_per_request,
+        data_entries_repo,
+        config.data_entries.starting_height,
+        config.data_entries.updates_per_request,
+        config.data_entries.max_wait_time_in_secs,
     )
     .await
     {
