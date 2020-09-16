@@ -30,11 +30,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
     max_wait_time_in_secs: u64,
 ) -> Result<(), Error> {
     loop {
-        let last_handled_height = dbw
-            .try_lock()
-            .unwrap()
-            .get_last_handled_height()?
-            .unwrap_or(1) as u32;
+        let last_handled_height = dbw.try_lock().unwrap().get_last_handled_height()? as u32;
 
         let from_height = if last_handled_height < min_height {
             min_height

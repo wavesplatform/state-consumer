@@ -36,11 +36,12 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f(self.conn.clone()))
     }
 
-    fn get_last_handled_height(&self) -> Result<Option<i32>, Error> {
+    fn get_last_handled_height(&self) -> Result<i32, Error> {
         blocks_microblocks
-            .select(diesel::expression::sql_literal::sql("max(height)"))
+            .select(diesel::expression::sql_literal::sql(
+                "coalesce(max(height), 0)",
+            ))
             .get_result::<i32>(&self.conn as &PgConnection)
-            .optional()
             .map_err(|err| Error::DbError(err))
     }
 
@@ -172,13 +173,12 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::DbError(err))
     }
 
-    fn delete_last_block(&mut self) -> Result<Option<i32>, Error> {
+    fn delete_last_block(&mut self) -> Result<(), Error> {
         diesel::delete(blocks_microblocks.filter(blocks_microblocks::height.eq(
             diesel::expression::sql_literal::sql("(select max(height) from blocks_microblocks)"),
         )))
-        .returning(blocks_microblocks::height)
-        .get_result(&self.conn as &PgConnection)
-        .optional()
+        .execute(&self.conn as &PgConnection)
+        .map(|_| ())
         .map_err(|err| Error::DbError(err))
     }
 
