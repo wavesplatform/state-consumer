@@ -20,6 +20,8 @@ use waves_protobuf_schemas::waves::{
         BlockchainUpdated,
     },
 };
+use crate::log::APP_LOG;
+use slog::info;
 
 #[derive(Clone)]
 pub struct DataEntriesSourceImpl {
@@ -65,6 +67,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                 Some(SubscribeEvent {
                     update: Some(update),
                 }) => {
+                    info!(APP_LOG, "{:?}", update);
                     last_height = update.height as u32;
                     match BlockchainUpdate::try_from(update) {
                         Ok(upd) => {

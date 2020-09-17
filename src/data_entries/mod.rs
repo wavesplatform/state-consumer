@@ -158,8 +158,6 @@ pub trait DataEntriesRepo {
         f: impl FnOnce(Arc<PgConnection>) -> Result<(), Error>,
     ) -> Result<(), Error>;
 
-    fn get_last_handled_height(&self) -> Result<i32, Error>;
-
     fn get_block_uid(&mut self, block_id: &str) -> Result<i64, Error>;
 
     fn get_key_block_uid(&mut self) -> Result<Option<i64>, Error>;
@@ -187,7 +185,7 @@ pub trait DataEntriesRepo {
 
     fn delete_microblocks(&mut self) -> Result<(), Error>;
 
-    fn delete_last_block(&mut self) -> Result<(), Error>;
+    fn delete_last_block(&mut self) -> Result<Option<i32>, Error>;
 
     fn rollback_blocks_microblocks(&mut self, block_uid: &i64) -> Result<(), Error>;
 
