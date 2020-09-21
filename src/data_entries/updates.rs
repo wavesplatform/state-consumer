@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::UnboundedSender;
 use waves_protobuf_schemas::waves::{
     data_transaction_data::data_entry::Value,
     events::{
@@ -39,10 +40,11 @@ impl DataEntriesSourceImpl {
 impl DataEntriesSource for DataEntriesSourceImpl {
     async fn fetch_updates(
         &self,
+        tx: UnboundedSender<BlockchainUpdatesWithLastHeight>,
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
-    ) -> Result<BlockchainUpdatesWithLastHeight, Error> {
+    ) -> Result<(), Error> {
         let request = tonic::Request::new(SubscribeRequest {
             from_height: from_height as i32,
             to_height: 0,
@@ -58,9 +60,10 @@ impl DataEntriesSource for DataEntriesSourceImpl {
         let mut result = vec![];
         let mut last_height = from_height;
 
-        let now = Instant::now();
+        let mut start = Instant::now();
         let mut should_receive_more = true;
-        while should_receive_more {
+
+        loop {
             match stream.message().await? {
                 Some(SubscribeEvent {
                     update: Some(update),
@@ -72,7 +75,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                             match upd {
                                 BlockchainUpdate::Block(_) => {
                                     if result.len() >= batch_max_size
-                                        || now.elapsed().ge(&batch_max_wait_time)
+                                        || start.elapsed().ge(&batch_max_wait_time)
                                     {
                                         should_receive_more = false;
                                     }
@@ -87,12 +90,17 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                 }
                 _ => {}
             }
-        }
 
-        Ok(BlockchainUpdatesWithLastHeight {
-            last_height: last_height,
-            updates: result,
-        })
+            if !should_receive_more {
+                tx.send(BlockchainUpdatesWithLastHeight {
+                    last_height: last_height,
+                    updates: result.clone(),
+                })?;
+                should_receive_more = true;
+                start = Instant::now();
+                result.clear();
+            }
+        }
     }
 }
 

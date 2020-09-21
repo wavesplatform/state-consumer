@@ -7,10 +7,11 @@ use crate::schema::blocks_microblocks;
 use crate::schema::data_entries;
 use async_trait::async_trait;
 use diesel::sql_types::{BigInt, Nullable, Text};
-use diesel::{Insertable, QueryableByName};
+use diesel::Insertable;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
 pub const STRING_DESCRIPTOR: &str = "$";
@@ -116,10 +117,11 @@ pub struct DataEntryUpdate {
 pub trait DataEntriesSource {
     async fn fetch_updates(
         &self,
+        tx: UnboundedSender<BlockchainUpdatesWithLastHeight>,
         from_height: u32,
         batch_max_size: usize,
         batch_max_time: Duration,
-    ) -> Result<BlockchainUpdatesWithLastHeight, Error>;
+    ) -> Result<(), Error>;
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]

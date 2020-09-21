@@ -1,3 +1,4 @@
+use crate::data_entries::BlockchainUpdatesWithLastHeight;
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -9,6 +10,9 @@ pub enum Error {
     InvalidBase58String(bs58::decode::Error),
     DbError(diesel::result::Error),
     ConnectionError(diesel::ConnectionError),
+    SendError(tokio::sync::mpsc::error::SendError<BlockchainUpdatesWithLastHeight>),
+    JoinError(tokio::task::JoinError),
+    RecvEmpty(String)
 }
 
 use Error::*;
@@ -49,6 +53,18 @@ impl From<envy::Error> for Error {
     }
 }
 
+impl From<tokio::sync::mpsc::error::SendError<BlockchainUpdatesWithLastHeight>> for Error {
+    fn from(err: tokio::sync::mpsc::error::SendError<BlockchainUpdatesWithLastHeight>) -> Self {
+        SendError(err)
+    }
+}
+
+impl From<tokio::task::JoinError> for Error {
+    fn from(err: tokio::task::JoinError) -> Self {
+        JoinError(err)
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -59,6 +75,9 @@ impl Display for Error {
             InvalidBase58String(err) => write!(f, "InvalidBase58String: {}", err),
             DbError(err) => write!(f, "DbError: {}", err),
             ConnectionError(err) => write!(f, "ConnectionError: {}", err),
+            SendError(err) => write!(f, "SendError: {}", err),
+            JoinError(err) => write!(f, "JoinError: {}", err),
+            RecvEmpty(err) => write!(f, "RecvEmpty: {}", err),
         }
     }
 }
