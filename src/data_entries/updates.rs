@@ -128,7 +128,9 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
                                         Value::IntValue(v) => value_integer = Some(v.to_owned()),
                                         Value::BoolValue(v) => value_bool = Some(v.to_owned()),
                                         Value::BinaryValue(v) => value_binary = Some(v.to_owned()),
-                                        Value::StringValue(v) => value_string = Some(v.to_owned()),
+                                        Value::StringValue(v) => {
+                                            value_string = Some(v.replace("\0", "\\0").to_owned())
+                                        }
                                     },
                                     None => {}
                                 }

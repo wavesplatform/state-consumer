@@ -84,4 +84,4 @@ CREATE INDEX data_entries_fragment_10_string_idx ON data_entries (fragment_10_st
 CREATE INDEX data_entries_fragment_10_integer_idx ON data_entries (fragment_10_integer);
 CREATE INDEX data_entries_key_idx ON data_entries(key);
 CREATE INDEX data_entries_value_integer_idx ON data_entries(value_integer);
-CREATE INDEX data_entries_value_string_idx ON data_entries(value_string);
+CREATE INDEX data_entries_md5_value_string_idx ON data_entries(md5(value_string));
