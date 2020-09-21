@@ -1,14 +1,14 @@
 use super::{
-    repo::DataEntriesRepoImpl, BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate,
-    DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, InsertableDataEntry,
-    FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
+    BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, DataEntriesRepo, DataEntriesSource,
+    DataEntry, DataEntryUpdate, InsertableDataEntry, FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR,
+    STRING_DESCRIPTOR,
 };
 use crate::error::Error;
 use crate::log::APP_LOG;
 use itertools::Itertools;
 use slog::info;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 enum UpdatesItem {
@@ -24,44 +24,46 @@ struct BlockUidWithDataEntry {
 
 pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
     updates_src: T,
-    dbw: Arc<Mutex<U>>,
+    dbw: Arc<U>,
     min_height: u32,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
 ) -> Result<(), Error> {
     loop {
-        dbw.try_lock().unwrap().transaction(|conn| {
-            let dbw = Arc::new(Mutex::new(DataEntriesRepoImpl::new(conn.clone())));
-            let last_handled_height =
-                dbw.try_lock().unwrap().delete_last_block()?.unwrap_or(1) as u32;
+        let last_handled_height = dbw.get_last_height()? as u32;
 
-            let from_height = if last_handled_height < min_height {
-                min_height
-            } else {
-                last_handled_height
-            };
+        let from_height = if last_handled_height < min_height {
+            min_height
+        } else {
+            last_handled_height
+        };
 
-            info!(
-                APP_LOG,
-                "Fetching data entries updates from height {}", from_height
-            );
-            let max_duration = Duration::from_secs(max_wait_time_in_secs);
-            let mut start = Instant::now();
+        info!(
+            APP_LOG,
+            "Fetching data entries updates from height {}", from_height
+        );
+        let max_duration = Duration::from_secs(max_wait_time_in_secs);
+        let mut start = Instant::now();
 
-            let handle = tokio::runtime::Handle::try_current()?;
-            let updates_with_height = handle.block_on(updates_src.fetch_updates(
+        let updates_with_height = updates_src
+            .fetch_updates(
                 from_height,
                 updates_per_request + 1, // +1 because of deleting last block
                 max_duration,
-            ))?;
-            info!(
-                APP_LOG,
-                "{} updates were received for {:?}",
-                updates_with_height.updates.len(),
-                start.elapsed()
-            );
+            )
+            .await?;
 
-            start = Instant::now();
+        info!(
+            APP_LOG,
+            "{} updates were received for {:?}",
+            updates_with_height.updates.len(),
+            start.elapsed()
+        );
+
+        start = Instant::now();
+
+        dbw.transaction(|| {
+            dbw.delete_last_block()?.unwrap_or(1);
 
             updates_with_height
                 .updates
@@ -105,8 +107,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync, U: DataEntriesRepo>(
                         append_blocks_or_microblocks(dbw.clone(), &vec![mba.to_owned()])
                     }
                     UpdatesItem::Rollback(sig) => {
-                        let block_uid = dbw.try_lock().unwrap().get_block_uid(&sig)?;
-                        dbw.lock().unwrap().rollback_blocks_microblocks(&block_uid)
+                        let block_uid = dbw.get_block_uid(&sig)?;
+                        dbw.rollback_blocks_microblocks(&block_uid)
                     }
                 })?;
 
@@ -149,11 +151,9 @@ fn extract_integer_fragment(values: &Vec<(String, String)>, position: usize) -> 
 }
 
 fn append_blocks_or_microblocks<U: DataEntriesRepo>(
-    dbw: Arc<Mutex<U>>,
+    dbw: Arc<U>,
     appends: &Vec<BlockMicroblockAppend>,
 ) -> Result<(), Error> {
-    let mut dbw = dbw.try_lock().unwrap();
-
     let block_uids = dbw.insert_blocks_or_microblocks(
         &appends
             .into_iter()
@@ -183,14 +183,14 @@ fn append_blocks_or_microblocks<U: DataEntriesRepo>(
         .collect_vec();
 
     if data_entries.len() > 0 {
-        append_data_entries(dbw, data_entries)
+        append_data_entries(dbw.clone(), data_entries)
     } else {
         Ok(())
     }
 }
 
 fn append_data_entries<U: DataEntriesRepo>(
-    mut dbw: MutexGuard<U>,
+    dbw: Arc<U>,
     updates: Vec<BlockUidWithDataEntry>,
 ) -> Result<(), Error> {
     let next_uid = dbw.get_next_update_uid()?;
@@ -322,27 +322,18 @@ fn append_data_entries<U: DataEntriesRepo>(
     dbw.set_next_update_uid(next_uid + updates_count)
 }
 
-fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<Mutex<U>>) -> Result<(), Error> {
-    let total_block_id = dbw.try_lock().unwrap().get_total_block_id()?;
+fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<U>) -> Result<(), Error> {
+    let total_block_id = dbw.get_total_block_id()?;
 
     match total_block_id {
         Some(total_block_id) => {
-            let key_block_uid = dbw.try_lock().unwrap().get_key_block_uid()?;
+            let key_block_uid = dbw.get_key_block_uid()?;
 
-            match key_block_uid {
-                Some(key_block_uid) => {
-                    dbw.lock()
-                        .unwrap()
-                        .update_data_entries_block_references(&key_block_uid)?;
+            dbw.update_data_entries_block_references(&key_block_uid)?;
 
-                    dbw.try_lock().unwrap().delete_microblocks()?;
+            dbw.delete_microblocks()?;
 
-                    dbw.try_lock()
-                        .unwrap()
-                        .change_block_id(&key_block_uid, &total_block_id)?;
-                }
-                None => (),
-            }
+            dbw.change_block_id(&key_block_uid, &total_block_id)?;
         }
         None => (),
     }

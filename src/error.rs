@@ -9,7 +9,6 @@ pub enum Error {
     InvalidBase58String(bs58::decode::Error),
     DbError(diesel::result::Error),
     ConnectionError(diesel::ConnectionError),
-    RuntimeError(tokio::runtime::TryCurrentError),
 }
 
 use Error::*;
@@ -50,12 +49,6 @@ impl From<envy::Error> for Error {
     }
 }
 
-impl From<tokio::runtime::TryCurrentError> for Error {
-    fn from(err: tokio::runtime::TryCurrentError) -> Self {
-        RuntimeError(err)
-    }
-}
-
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -66,7 +59,6 @@ impl Display for Error {
             InvalidBase58String(err) => write!(f, "InvalidBase58String: {}", err),
             DbError(err) => write!(f, "DbError: {}", err),
             ConnectionError(err) => write!(f, "ConnectionError: {}", err),
-            RuntimeError(err) => write!(f, "RuntimeError: {}", err),
         }
     }
 }
