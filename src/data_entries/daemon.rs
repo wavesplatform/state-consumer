@@ -65,7 +65,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
         info!(
             APP_LOG,
-            "{} updates were received for {:?}",
+            "{} updates were received in {:?}",
             updates_with_height.updates.len(),
             start.elapsed()
         );
