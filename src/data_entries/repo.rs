@@ -31,15 +31,6 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f())
     }
 
-    fn get_last_height(&self) -> Result<i32, Error> {
-        blocks_microblocks
-            .select(diesel::expression::sql_literal::sql(
-                "coalesce(max(height), 1)",
-            ))
-            .get_result(&self.conn)
-            .map_err(|err| Error::DbError(err))
-    }
-
     fn get_block_uid(&self, block_id: &str) -> Result<i64, Error> {
         blocks_microblocks
             .select(blocks_microblocks::uid)

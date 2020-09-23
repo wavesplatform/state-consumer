@@ -26,33 +26,21 @@ struct BlockUidWithDataEntry {
 pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesRepo>(
     updates_src: T,
     dbw: Arc<U>,
-    min_height: u32,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
 ) -> Result<(), Error> {
-    let last_handled_height = dbw.get_last_height()? as u32;
-
-    let from_height = if last_handled_height < min_height {
-        min_height
-    } else {
-        last_handled_height
-    };
+    let last_handled_height = dbw.delete_last_block()?.unwrap_or(1) as u32;
 
     info!(
         APP_LOG,
-        "Fetching data entries updates from height {}", from_height
+        "Fetching data entries updates from height {}", last_handled_height
     );
     let max_duration = Duration::from_secs(max_wait_time_in_secs);
 
     let (tx, mut rx) = unbounded_channel::<BlockchainUpdatesWithLastHeight>();
     tokio::task::spawn(async move {
         updates_src
-            .fetch_updates(
-                tx,
-                from_height,
-                updates_per_request + 1, // +1 because of deleting last block
-                max_duration,
-            )
+            .fetch_updates(tx, last_handled_height, updates_per_request, max_duration)
             .await
     });
 
@@ -73,8 +61,6 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
         start = Instant::now();
 
         dbw.transaction(|| {
-            dbw.delete_last_block()?.unwrap_or(1);
-
             updates_with_height
                 .updates
                 .into_iter()

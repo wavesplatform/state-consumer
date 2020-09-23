@@ -17,10 +17,6 @@ fn default_max_wait_time_in_secs() -> u64 {
     5
 }
 
-fn default_starting_height() -> u32 {
-    0
-}
-
 #[derive(Deserialize, Debug, Clone)]
 struct ConfigFlat {
     #[serde(default = "default_port")]
@@ -39,8 +35,6 @@ struct ConfigFlat {
     pub updates_per_request: usize,
     #[serde(default = "default_max_wait_time_in_secs")]
     pub max_wait_time_in_secs: u64,
-    #[serde(default = "default_starting_height")]
-    pub starting_height: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +62,6 @@ pub fn load() -> Result<Config, Error> {
             blockchain_updates_url: config_flat.blockchain_updates_url,
             updates_per_request: config_flat.updates_per_request,
             max_wait_time_in_secs: config_flat.max_wait_time_in_secs,
-            starting_height: config_flat.starting_height,
         },
         postgres: PostgresConfig {
             host: config_flat.pghost,

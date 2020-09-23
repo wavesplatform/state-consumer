@@ -22,7 +22,6 @@ pub struct Config {
     pub blockchain_updates_url: String,
     pub updates_per_request: usize,
     pub max_wait_time_in_secs: u64,
-    pub starting_height: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -155,8 +154,6 @@ pub struct BlockchainUpdatesWithLastHeight {
 
 pub trait DataEntriesRepo {
     fn transaction(&self, f: impl FnOnce() -> Result<(), Error>) -> Result<(), Error>;
-
-    fn get_last_height(&self) -> Result<i32, Error>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64, Error>;
 
