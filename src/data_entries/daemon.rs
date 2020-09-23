@@ -200,15 +200,12 @@ fn append_data_entries<U: DataEntriesRepo>(
             let types = frs
                 .next()
                 .map(|fragment| {
-                    fragment.strip_prefix("@").map(|types| {
-                        types
-                            .split("")
-                            .into_iter()
-                            .filter(|s| s.len() > 0)
-                            .collect()
-                    })
+                    fragment
+                        .split("")
+                        .into_iter()
+                        .skip(1) // first item is empty
+                        .collect()
                 })
-                .flatten()
                 .unwrap_or(vec![]);
 
             let values = types.into_iter().zip(frs).collect();
