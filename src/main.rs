@@ -8,13 +8,14 @@ pub mod error;
 pub mod log;
 pub mod schema;
 
+use anyhow::Result;
 use data_entries::{repo::DataEntriesRepoImpl, updates::DataEntriesSourceImpl};
 use log::APP_LOG;
 use slog::{error, info};
 use std::sync::Arc;
 
 #[tokio::main]
-async fn main() -> Result<(), error::Error> {
+async fn main() -> Result<()> {
     let config = config::load()?;
 
     let conn = db::new(&config.postgres)?;

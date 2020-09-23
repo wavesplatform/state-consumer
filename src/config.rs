@@ -1,4 +1,5 @@
-use crate::{data_entries, error::Error};
+use crate::data_entries;
+use anyhow::Result;
 use serde::Deserialize;
 
 fn default_port() -> u16 {
@@ -53,7 +54,7 @@ pub struct PostgresConfig {
     pub password: String,
 }
 
-pub fn load() -> Result<Config, Error> {
+pub fn load() -> Result<Config> {
     let config_flat = envy::from_env::<ConfigFlat>()?;
 
     Ok(Config {

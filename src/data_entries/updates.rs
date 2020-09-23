@@ -2,7 +2,8 @@ use super::{
     BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdatesWithLastHeight, DataEntriesSource,
     DataEntry,
 };
-use crate::error::Error;
+use crate::error::AppError;
+use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashSet;
 use std::convert::TryFrom;
@@ -28,7 +29,7 @@ pub struct DataEntriesSourceImpl {
 }
 
 impl DataEntriesSourceImpl {
-    pub async fn new(blockchain_updates_url: &str) -> Result<Self, Error> {
+    pub async fn new(blockchain_updates_url: &str) -> Result<Self> {
         Ok(Self {
             grpc_client: BlockchainUpdatesApiClient::connect(blockchain_updates_url.to_owned())
                 .await?,
@@ -44,7 +45,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let request = tonic::Request::new(SubscribeRequest {
             from_height: from_height as i32,
             to_height: 0,
@@ -105,7 +106,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
 }
 
 impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
-    type Error = Error;
+    type Error = AppError;
 
     fn try_from(value: BlockchainUpdated) -> Result<Self, Self::Error> {
         match value.update {
@@ -189,13 +190,15 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
                             data_entries: data_entries,
                         }))
                     }
-                    _ => Err(Error::InvalidMessage("Append body is empty.".to_string())),
+                    _ => Err(AppError::InvalidMessage(
+                        "Append body is empty.".to_string(),
+                    )),
                 }
             }
             Some(Update::Rollback(_)) => Ok(BlockchainUpdate::Rollback(
                 bs58::encode(&value.id).into_string(),
             )),
-            _ => Err(Error::InvalidMessage(
+            _ => Err(AppError::InvalidMessage(
                 "Unknown blockchain update case.".to_string(),
             )),
         }

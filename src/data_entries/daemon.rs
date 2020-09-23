@@ -3,8 +3,9 @@ use super::{
     DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, InsertableDataEntry,
     FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
-use crate::error::Error;
+use crate::error::AppError;
 use crate::log::APP_LOG;
+use anyhow::{Error, Result};
 use itertools::Itertools;
 use slog::info;
 use std::collections::HashMap;
@@ -28,7 +29,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     dbw: Arc<U>,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
-) -> Result<(), Error> {
+) -> Result<()> {
     let last_handled_height = dbw.delete_last_block()?.unwrap_or(1) as u32;
 
     info!(
@@ -47,9 +48,9 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     loop {
         let mut start = Instant::now();
 
-        let updates_with_height = rx.recv().await.ok_or(Error::RecvEmpty(
+        let updates_with_height = rx.recv().await.ok_or(Error::new(AppError::RecvEmpty(
             "There are not any blockchain updates in the next value of receiver.".to_string(),
-        ))?;
+        )))?;
 
         info!(
             APP_LOG,
@@ -99,7 +100,6 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                         append_blocks_or_microblocks(dbw.clone(), bs.as_ref())
                     }
                     UpdatesItem::Microblock(mba) => {
-                        squash_microblocks(dbw.clone())?;
                         append_blocks_or_microblocks(dbw.clone(), &vec![mba.to_owned()])
                     }
                     UpdatesItem::Rollback(sig) => {
@@ -143,7 +143,7 @@ fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Opti
 fn append_blocks_or_microblocks<U: DataEntriesRepo>(
     dbw: Arc<U>,
     appends: &Vec<BlockMicroblockAppend>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let block_uids = dbw.insert_blocks_or_microblocks(
         &appends
             .into_iter()
@@ -182,7 +182,7 @@ fn append_blocks_or_microblocks<U: DataEntriesRepo>(
 fn append_data_entries<U: DataEntriesRepo>(
     dbw: Arc<U>,
     updates: Vec<BlockUidWithDataEntry>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let next_uid = dbw.get_next_update_uid()?;
     let updates_count = updates.len() as i64;
 
@@ -201,7 +201,7 @@ fn append_data_entries<U: DataEntriesRepo>(
                 .next()
                 .map(|fragment| {
                     fragment
-                        .split("")
+                        .split("%")
                         .into_iter()
                         .skip(1) // first item is empty
                         .collect()
@@ -310,7 +310,7 @@ fn append_data_entries<U: DataEntriesRepo>(
     dbw.set_next_update_uid(next_uid + updates_count)
 }
 
-fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<U>) -> Result<(), Error> {
+fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<U>) -> Result<()> {
     let total_block_id = dbw.get_total_block_id()?;
 
     match total_block_id {

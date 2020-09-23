@@ -24,6 +24,8 @@ diesel = { version = "1.4.5", features = ["postgres", "r2d2", "chrono", "numeric
 r2d2 = "0.8"
 base64 = "0.12"
 itertools = "0.9"
+anyhow = "1.0"
+thiserror = "1.0"
 
 [[bin]]
 name = "service"

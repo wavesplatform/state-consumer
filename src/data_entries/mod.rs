@@ -2,9 +2,9 @@ pub mod daemon;
 pub mod repo;
 pub mod updates;
 
-use crate::error::Error;
 use crate::schema::blocks_microblocks;
 use crate::schema::data_entries;
+use anyhow::Result;
 use async_trait::async_trait;
 use diesel::sql_types::{BigInt, Nullable, Text};
 use diesel::Insertable;
@@ -14,8 +14,8 @@ use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
-pub const STRING_DESCRIPTOR: &str = "$";
-pub const INTEGER_DESCRIPTOR: &str = "#";
+pub const STRING_DESCRIPTOR: &str = "s";
+pub const INTEGER_DESCRIPTOR: &str = "d";
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -120,7 +120,7 @@ pub trait DataEntriesSource {
         from_height: u32,
         batch_max_size: usize,
         batch_max_time: Duration,
-    ) -> Result<(), Error>;
+    ) -> Result<()>;
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]
@@ -153,38 +153,35 @@ pub struct BlockchainUpdatesWithLastHeight {
 }
 
 pub trait DataEntriesRepo {
-    fn transaction(&self, f: impl FnOnce() -> Result<(), Error>) -> Result<(), Error>;
+    fn transaction(&self, f: impl FnOnce() -> Result<()>) -> Result<()>;
 
-    fn get_block_uid(&self, block_id: &str) -> Result<i64, Error>;
+    fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 
-    fn get_key_block_uid(&self) -> Result<i64, Error>;
+    fn get_key_block_uid(&self) -> Result<i64>;
 
-    fn get_total_block_id(&self) -> Result<Option<String>, Error>;
+    fn get_total_block_id(&self) -> Result<Option<String>>;
 
-    fn get_next_update_uid(&self) -> Result<i64, Error>;
+    fn get_next_update_uid(&self) -> Result<i64>;
 
-    fn insert_blocks_or_microblocks(
-        &self,
-        blocks: &Vec<BlockMicroblock>,
-    ) -> Result<Vec<i64>, Error>;
+    fn insert_blocks_or_microblocks(&self, blocks: &Vec<BlockMicroblock>) -> Result<Vec<i64>>;
 
-    fn insert_data_entries(&self, entries: &Vec<InsertableDataEntry>) -> Result<(), Error>;
+    fn insert_data_entries(&self, entries: &Vec<InsertableDataEntry>) -> Result<()>;
 
-    fn close_superseded_by(&self, updates: &Vec<DataEntryUpdate>) -> Result<(), Error>;
+    fn close_superseded_by(&self, updates: &Vec<DataEntryUpdate>) -> Result<()>;
 
-    fn reopen_superseded_by(&self, current_superseded_by: &i64) -> Result<(), Error>;
+    fn reopen_superseded_by(&self, current_superseded_by: &i64) -> Result<()>;
 
-    fn set_next_update_uid(&self, uid: i64) -> Result<(), Error>;
+    fn set_next_update_uid(&self, uid: i64) -> Result<()>;
 
-    fn change_block_id(&self, block_uid: &i64, new_block_id: &str) -> Result<(), Error>;
+    fn change_block_id(&self, block_uid: &i64, new_block_id: &str) -> Result<()>;
 
-    fn update_data_entries_block_references(&self, block_uid: &i64) -> Result<(), Error>;
+    fn update_data_entries_block_references(&self, block_uid: &i64) -> Result<()>;
 
-    fn delete_microblocks(&self) -> Result<(), Error>;
+    fn delete_microblocks(&self) -> Result<()>;
 
-    fn delete_last_block(&self) -> Result<Option<i32>, Error>;
+    fn delete_last_block(&self) -> Result<Option<i32>>;
 
-    fn rollback_blocks_microblocks(&self, block_uid: &i64) -> Result<(), Error>;
+    fn rollback_blocks_microblocks(&self, block_uid: &i64) -> Result<()>;
 
-    fn rollback_data_entries(&mut self, block_uid: &i64) -> Result<(), Error>;
+    fn rollback_data_entries(&mut self, block_uid: &i64) -> Result<()>;
 }
