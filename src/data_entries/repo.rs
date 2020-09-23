@@ -1,4 +1,7 @@
-use super::{BlockMicroblock, DataEntriesRepo, DataEntryUpdate, InsertableDataEntry};
+use super::{
+    BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry,
+    PrevHandledHeight,
+};
 use crate::error::AppError;
 use crate::schema::blocks_microblocks;
 use crate::schema::blocks_microblocks::dsl::*;
@@ -33,6 +36,20 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f())
     }
 
+    fn get_prev_handled_height(&self) -> Result<Option<PrevHandledHeight>> {
+        blocks_microblocks
+            .select((blocks_microblocks::uid, blocks_microblocks::height))
+            .filter(
+                blocks_microblocks::height.eq(diesel::expression::sql_literal::sql(
+                    "(select max(height) - 1 from blocks_microblocks)",
+                )),
+            )
+            .order(blocks_microblocks::uid.asc())
+            .first(&self.conn)
+            .optional()
+            .map_err(|err| Error::new(AppError::DbError(err)))
+    }
+
     fn get_block_uid(&self, block_id: &str) -> Result<i64> {
         blocks_microblocks
             .select(blocks_microblocks::uid)
@@ -47,7 +64,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
     fn get_key_block_uid(&self) -> Result<i64> {
         blocks_microblocks
             .select(diesel::expression::sql_literal::sql("max(uid)"))
-            .filter(blocks_microblocks::time_stamp.is_null())
+            .filter(blocks_microblocks::time_stamp.is_not_null())
             .get_result(&self.conn)
             .map_err(|err| Error::new(AppError::DbError(err)).context("Cannot get key block uid."))
     }
@@ -117,10 +134,10 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 
-    fn reopen_superseded_by(&self, current_superseded_by: &i64) -> Result<()> {
-        diesel::update(data_entries::table)
-            .set(data_entries::superseded_by.eq(MAX_UID))
-            .filter(data_entries::superseded_by.eq(current_superseded_by))
+    fn reopen_superseded_by(&self, current_superseded_by: &Vec<i64>) -> Result<()> {
+        diesel::sql_query("UPDATE data_entries SET superseded_by = $1 FROM (SELECT UNNEST($2) AS superseded_by) AS current WHERE data_entries.superseded_by = current.superseded_by;")
+            .bind::<BigInt, _>(MAX_UID)
+            .bind::<Array<BigInt>, _>(current_superseded_by)
             .execute(&self.conn)
             .map(|_| ())
             .map_err(|err| Error::new(AppError::DbError(err)))
@@ -162,16 +179,6 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 
-    fn delete_last_block(&self) -> Result<Option<i32>> {
-        diesel::delete(blocks_microblocks.filter(blocks_microblocks::height.eq(
-            diesel::expression::sql_literal::sql("(select max(height) from blocks_microblocks)"),
-        )))
-        .returning(blocks_microblocks::height)
-        .get_result(&self.conn)
-        .optional()
-        .map_err(|err| Error::new(AppError::DbError(err)))
-    }
-
     fn rollback_blocks_microblocks(&self, block_uid: &i64) -> Result<()> {
         diesel::delete(blocks_microblocks::table)
             .filter(blocks_microblocks::uid.gt(block_uid))
@@ -180,11 +187,20 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 
-    fn rollback_data_entries(&mut self, block_uid: &i64) -> Result<()> {
+    fn rollback_data_entries(&self, block_uid: &i64) -> Result<Vec<DeletedDataEntry>> {
         diesel::delete(data_entries::table)
             .filter(data_entries::block_uid.gt(block_uid))
-            .execute(&self.conn)
-            .map(|_| ())
+            .returning((data_entries::address, data_entries::key, data_entries::uid))
+            .get_results(&self.conn)
+            .map(|des| {
+                des.into_iter()
+                    .map(|(de_address, de_key, de_uid)| DeletedDataEntry {
+                        address: de_address,
+                        key: de_key,
+                        uid: de_uid,
+                    })
+                    .collect()
+            })
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 }

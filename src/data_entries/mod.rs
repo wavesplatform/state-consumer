@@ -7,7 +7,7 @@ use crate::schema::data_entries;
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel::sql_types::{BigInt, Nullable, Text};
-use diesel::Insertable;
+use diesel::{Insertable, Queryable};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
@@ -112,6 +112,28 @@ pub struct DataEntryUpdate {
     pub key: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct DeletedDataEntry {
+    pub uid: i64,
+    pub address: String,
+    pub key: String,
+}
+
+impl PartialEq for DeletedDataEntry {
+    fn eq(&self, other: &DeletedDataEntry) -> bool {
+        (&self.address, &self.key) == (&other.address, &other.key)
+    }
+}
+
+impl Eq for DeletedDataEntry {}
+
+impl Hash for DeletedDataEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.address.hash(state);
+        self.key.hash(state);
+    }
+}
+
 #[async_trait]
 pub trait DataEntriesSource {
     async fn fetch_updates(
@@ -152,8 +174,16 @@ pub struct BlockchainUpdatesWithLastHeight {
     pub updates: Vec<BlockchainUpdate>,
 }
 
+#[derive(Debug, Queryable)]
+pub struct PrevHandledHeight {
+    pub uid: i64,
+    pub height: i32,
+}
+
 pub trait DataEntriesRepo {
     fn transaction(&self, f: impl FnOnce() -> Result<()>) -> Result<()>;
+
+    fn get_prev_handled_height(&self) -> Result<Option<PrevHandledHeight>>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 
@@ -169,7 +199,7 @@ pub trait DataEntriesRepo {
 
     fn close_superseded_by(&self, updates: &Vec<DataEntryUpdate>) -> Result<()>;
 
-    fn reopen_superseded_by(&self, current_superseded_by: &i64) -> Result<()>;
+    fn reopen_superseded_by(&self, current_superseded_by: &Vec<i64>) -> Result<()>;
 
     fn set_next_update_uid(&self, uid: i64) -> Result<()>;
 
@@ -179,9 +209,7 @@ pub trait DataEntriesRepo {
 
     fn delete_microblocks(&self) -> Result<()>;
 
-    fn delete_last_block(&self) -> Result<Option<i32>>;
-
     fn rollback_blocks_microblocks(&self, block_uid: &i64) -> Result<()>;
 
-    fn rollback_data_entries(&mut self, block_uid: &i64) -> Result<()>;
+    fn rollback_data_entries(&self, block_uid: &i64) -> Result<Vec<DeletedDataEntry>>;
 }

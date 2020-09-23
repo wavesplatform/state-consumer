@@ -1,7 +1,7 @@
 use super::{
     BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdatesWithLastHeight,
-    DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, InsertableDataEntry,
-    FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
+    DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, DeletedDataEntry,
+    InsertableDataEntry, FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
 use crate::error::AppError;
 use crate::log::APP_LOG;
@@ -19,6 +19,7 @@ enum UpdatesItem {
     Rollback(String),
 }
 
+#[derive(Debug)]
 struct BlockUidWithDataEntry {
     block_uid: i64,
     data_entry: DataEntry,
@@ -30,18 +31,24 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
 ) -> Result<()> {
-    let last_handled_height = dbw.delete_last_block()?.unwrap_or(1) as u32;
+    let starting_from_height = match dbw.get_prev_handled_height()? {
+        Some(prev_handled_height) => {
+            rollback(dbw.clone(), prev_handled_height.uid)?;
+            prev_handled_height.height as u32 + 1
+        }
+        None => 1u32,
+    };
 
     info!(
         APP_LOG,
-        "Fetching data entries updates from height {}", last_handled_height
+        "Fetching data entries updates from height {}", starting_from_height
     );
     let max_duration = Duration::from_secs(max_wait_time_in_secs);
 
     let (tx, mut rx) = unbounded_channel::<BlockchainUpdatesWithLastHeight>();
     tokio::task::spawn(async move {
         updates_src
-            .fetch_updates(tx, last_handled_height, updates_per_request, max_duration)
+            .fetch_updates(tx, starting_from_height, updates_per_request, max_duration)
             .await
     });
 
@@ -103,8 +110,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                         append_blocks_or_microblocks(dbw.clone(), &vec![mba.to_owned()])
                     }
                     UpdatesItem::Rollback(sig) => {
-                        let block_uid = dbw.get_block_uid(&sig)?;
-                        dbw.rollback_blocks_microblocks(&block_uid)
+                        let block_uid = dbw.clone().get_block_uid(&sig)?;
+                        rollback(dbw.clone(), block_uid)
                     }
                 })?;
 
@@ -138,6 +145,26 @@ fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Opti
             None
         }
     })
+}
+
+fn rollback<U: DataEntriesRepo>(dbw: Arc<U>, block_uid: i64) -> Result<()> {
+    let deletes = dbw.rollback_data_entries(&block_uid)?;
+
+    let mut grouped_deletes: HashMap<DeletedDataEntry, Vec<DeletedDataEntry>> = HashMap::new();
+
+    deletes.into_iter().for_each(|item| {
+        let group = grouped_deletes.entry(item.clone()).or_insert(vec![]);
+        group.push(item);
+    });
+
+    let lowest_deleted_uids: Vec<i64> = grouped_deletes
+        .into_iter()
+        .filter_map(|(_, group)| group.into_iter().min_by_key(|i| i.uid).map(|i| i.uid))
+        .collect();
+
+    dbw.reopen_superseded_by(&lowest_deleted_uids)?;
+
+    dbw.rollback_blocks_microblocks(&block_uid)
 }
 
 fn append_blocks_or_microblocks<U: DataEntriesRepo>(
