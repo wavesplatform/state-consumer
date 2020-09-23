@@ -124,7 +124,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
             info!(
                 APP_LOG,
-                "Updates were processed in {} secs. Last updated height {}.",
+                "Updates were processed in {} secs. Last updated height is {}.",
                 start.elapsed().as_secs(),
                 updates_with_height.last_height
             );
@@ -134,19 +134,19 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     }
 }
 
-fn extract_string_fragment(values: &Vec<(String, String)>, position: usize) -> Option<String> {
+fn extract_string_fragment(values: &Vec<(&str, &str)>, position: usize) -> Option<String> {
     values.get(position).map_or(None, |(t, v)| {
-        if t == STRING_DESCRIPTOR {
-            Some(v.to_owned())
+        if *t == STRING_DESCRIPTOR {
+            Some(v.to_string())
         } else {
             None
         }
     })
 }
 
-fn extract_integer_fragment(values: &Vec<(String, String)>, position: usize) -> Option<i32> {
+fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Option<i32> {
     values.get(position).map_or(None, |(t, v)| {
-        if t == INTEGER_DESCRIPTOR {
+        if *t == INTEGER_DESCRIPTOR {
             v.parse().ok()
         } else {
             None
@@ -213,18 +213,19 @@ fn append_data_entries<U: DataEntriesRepo>(
 
             let types = frs
                 .next()
-                .map(|ts| ts.split("").into_iter().collect_vec())
-                .unwrap_or(vec![]);
-            let values = frs
-                .enumerate()
-                .filter_map(|(idx, fragment)| {
-                    types
-                        .clone()
-                        .into_iter()
-                        .nth(idx)
-                        .map(|t| (t.to_owned(), fragment.to_owned()))
+                .map(|fragment| {
+                    fragment.strip_prefix("@").map(|types| {
+                        types
+                            .split("")
+                            .into_iter()
+                            .filter(|s| s.len() > 0)
+                            .collect()
+                    })
                 })
-                .collect();
+                .flatten()
+                .unwrap_or(vec![]);
+
+            let values = types.into_iter().zip(frs).collect();
 
             InsertableDataEntry {
                 block_uid: block_uid,
