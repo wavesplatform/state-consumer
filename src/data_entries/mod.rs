@@ -11,7 +11,7 @@ use diesel::{Insertable, Queryable};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
 pub const STRING_DESCRIPTOR: &str = "s";
@@ -136,13 +136,12 @@ impl Hash for DeletedDataEntry {
 
 #[async_trait]
 pub trait DataEntriesSource {
-    async fn fetch_updates(
-        &self,
-        tx: UnboundedSender<BlockchainUpdatesWithLastHeight>,
+    async fn stream(
+        self,
         from_height: u32,
         batch_max_size: usize,
         batch_max_time: Duration,
-    ) -> Result<()>;
+    ) -> Result<UnboundedReceiver<BlockchainUpdatesWithLastHeight>>;
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use waves_protobuf_schemas::waves::{
     data_transaction_data::data_entry::Value,
     events::{
@@ -35,29 +35,15 @@ impl DataEntriesSourceImpl {
                 .await?,
         })
     }
-}
 
-#[async_trait]
-impl DataEntriesSource for DataEntriesSourceImpl {
-    async fn fetch_updates(
+    async fn run(
         &self,
+        mut stream: tonic::Streaming<SubscribeEvent>,
         tx: UnboundedSender<BlockchainUpdatesWithLastHeight>,
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
     ) -> Result<()> {
-        let request = tonic::Request::new(SubscribeRequest {
-            from_height: from_height as i32,
-            to_height: 0,
-        });
-
-        let mut stream: tonic::Streaming<SubscribeEvent> = self
-            .grpc_client
-            .clone()
-            .subscribe(request)
-            .await?
-            .into_inner();
-
         let mut result = vec![];
         let mut last_height = from_height;
 
@@ -68,10 +54,10 @@ impl DataEntriesSource for DataEntriesSourceImpl {
             match stream.message().await? {
                 Some(SubscribeEvent {
                     update: Some(update),
-                }) => {
+                }) => Ok({
                     last_height = update.height as u32;
                     match BlockchainUpdate::try_from(update) {
-                        Ok(upd) => {
+                        Ok(upd) => Ok({
                             result.push(upd.clone());
                             match upd {
                                 BlockchainUpdate::Block(_) => {
@@ -85,12 +71,14 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                                     should_receive_more = false
                                 }
                             }
-                        }
-                        Err(_) => {}
-                    }
-                }
-                _ => {}
-            }
+                        }),
+                        Err(err) => Err(err),
+                    }?;
+                }),
+                _ => Err(AppError::StreamReceiveEmpty(
+                    "Empty message was received from the node.".to_string(),
+                )),
+            }?;
 
             if !should_receive_more {
                 tx.send(BlockchainUpdatesWithLastHeight {
@@ -102,6 +90,37 @@ impl DataEntriesSource for DataEntriesSourceImpl {
                 result.clear();
             }
         }
+    }
+}
+
+#[async_trait]
+impl DataEntriesSource for DataEntriesSourceImpl {
+    async fn stream(
+        self,
+        from_height: u32,
+        batch_max_size: usize,
+        batch_max_wait_time: Duration,
+    ) -> Result<UnboundedReceiver<BlockchainUpdatesWithLastHeight>> {
+        let request = tonic::Request::new(SubscribeRequest {
+            from_height: from_height as i32,
+            to_height: 0,
+        });
+
+        let stream: tonic::Streaming<SubscribeEvent> = self
+            .grpc_client
+            .clone()
+            .subscribe(request)
+            .await?
+            .into_inner();
+
+        let (tx, rx) = unbounded_channel::<BlockchainUpdatesWithLastHeight>();
+
+        tokio::spawn(async move {
+            self.run(stream, tx, from_height, batch_max_size, batch_max_wait_time)
+                .await
+        });
+
+        Ok(rx)
     }
 }
 
@@ -199,7 +218,7 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
                 bs58::encode(&value.id).into_string(),
             )),
             _ => Err(AppError::InvalidMessage(
-                "Unknown blockchain update case.".to_string(),
+                "Unknown blockchain update.".to_string(),
             )),
         }
     }

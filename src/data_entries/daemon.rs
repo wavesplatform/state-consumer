@@ -1,7 +1,7 @@
 use super::{
-    BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdatesWithLastHeight,
-    DataEntriesRepo, DataEntriesSource, DataEntry, DataEntryUpdate, DeletedDataEntry,
-    InsertableDataEntry, FRAGMENT_SEPARATOR, INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
+    BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, DataEntriesRepo, DataEntriesSource,
+    DataEntry, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, FRAGMENT_SEPARATOR,
+    INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
 use crate::error::AppError;
 use crate::log::APP_LOG;
@@ -11,7 +11,6 @@ use slog::info;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::unbounded_channel;
 
 enum UpdatesItem {
     Blocks(Vec<BlockMicroblockAppend>),
@@ -41,22 +40,19 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
     info!(
         APP_LOG,
-        "Fetching data entries updates from height {}", starting_from_height
+        "Fetching data entries updates from height {}.", starting_from_height
     );
     let max_duration = Duration::from_secs(max_wait_time_in_secs);
 
-    let (tx, mut rx) = unbounded_channel::<BlockchainUpdatesWithLastHeight>();
-    tokio::task::spawn(async move {
-        updates_src
-            .fetch_updates(tx, starting_from_height, updates_per_request, max_duration)
-            .await
-    });
+    let mut rx = updates_src
+        .stream(starting_from_height, updates_per_request, max_duration)
+        .await?;
 
     loop {
         let mut start = Instant::now();
 
-        let updates_with_height = rx.recv().await.ok_or(Error::new(AppError::RecvEmpty(
-            "There are not any blockchain updates in the next value of receiver.".to_string(),
+        let updates_with_height = rx.recv().await.ok_or(Error::new(AppError::StreamReceiveEmpty(
+            "There aren't any blockchain updates.".to_string(),
         )))?;
 
         info!(
