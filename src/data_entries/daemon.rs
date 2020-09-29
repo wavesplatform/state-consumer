@@ -40,7 +40,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
     info!(
         APP_LOG,
-        "Fetching data entries updates from height {}.", starting_from_height
+        "Fetching block updates from height {}.", starting_from_height
     );
     let max_duration = Duration::from_secs(max_wait_time_in_secs);
 
@@ -60,7 +60,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
         info!(
             APP_LOG,
-            "{} updates were received in {:?}",
+            "{} block updates were received in {:?}",
             updates_with_height.updates.len(),
             start.elapsed()
         );
