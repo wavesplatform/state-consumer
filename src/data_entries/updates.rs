@@ -5,7 +5,6 @@ use super::{
 use crate::error::AppError;
 use anyhow::Result;
 use async_trait::async_trait;
-use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -84,7 +83,8 @@ impl DataEntriesSourceImpl {
                 tx.send(BlockchainUpdatesWithLastHeight {
                     last_height: last_height,
                     updates: result.clone(),
-                }).await?;
+                })
+                .await?;
                 should_receive_more = true;
                 start = Instant::now();
                 result.clear();
@@ -137,10 +137,10 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
             })) => {
                 let height = value.height;
 
-                let data_entries: HashSet<DataEntry> = transaction_state_updates
+                let data_entries = transaction_state_updates
                     .iter()
                     .enumerate()
-                    .flat_map::<HashSet<DataEntry>, _>(|(idx, su)| {
+                    .flat_map::<Vec<DataEntry>, _>(|(idx, su)| {
                         su.data_entries
                             .iter()
                             .map(|de| {

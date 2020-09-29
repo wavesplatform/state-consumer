@@ -8,7 +8,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use diesel::sql_types::{BigInt, Nullable, Text};
 use diesel::{Insertable, Queryable};
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
@@ -157,7 +156,7 @@ pub struct BlockMicroblockAppend {
     id: String,
     time_stamp: Option<i64>,
     height: u32,
-    data_entries: HashSet<DataEntry>,
+    data_entries: Vec<DataEntry>,
 }
 
 #[derive(Clone, Debug)]
