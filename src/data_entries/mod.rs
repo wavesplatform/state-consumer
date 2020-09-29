@@ -11,7 +11,7 @@ use diesel::{Insertable, Queryable};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
 pub const STRING_DESCRIPTOR: &str = "s";
@@ -142,7 +142,7 @@ pub trait DataEntriesSource {
         from_height: u32,
         batch_max_size: usize,
         batch_max_time: Duration,
-    ) -> Result<UnboundedReceiver<BlockchainUpdatesWithLastHeight>>;
+    ) -> Result<Receiver<BlockchainUpdatesWithLastHeight>>;
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]

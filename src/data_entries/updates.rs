@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use waves_protobuf_schemas::waves::{
     data_transaction_data::data_entry::Value,
     events::{
@@ -39,7 +39,7 @@ impl DataEntriesSourceImpl {
     async fn run(
         &self,
         mut stream: tonic::Streaming<SubscribeEvent>,
-        tx: UnboundedSender<BlockchainUpdatesWithLastHeight>,
+        mut tx: Sender<BlockchainUpdatesWithLastHeight>,
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
@@ -84,7 +84,7 @@ impl DataEntriesSourceImpl {
                 tx.send(BlockchainUpdatesWithLastHeight {
                     last_height: last_height,
                     updates: result.clone(),
-                })?;
+                }).await?;
                 should_receive_more = true;
                 start = Instant::now();
                 result.clear();
@@ -100,7 +100,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
-    ) -> Result<UnboundedReceiver<BlockchainUpdatesWithLastHeight>> {
+    ) -> Result<Receiver<BlockchainUpdatesWithLastHeight>> {
         let request = tonic::Request::new(SubscribeRequest {
             from_height: from_height as i32,
             to_height: 0,
@@ -113,7 +113,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
             .await?
             .into_inner();
 
-        let (tx, rx) = unbounded_channel::<BlockchainUpdatesWithLastHeight>();
+        let (tx, rx) = channel::<BlockchainUpdatesWithLastHeight>(batch_max_size);
 
         tokio::spawn(async move {
             self.run(stream, tx, from_height, batch_max_size, batch_max_wait_time)
