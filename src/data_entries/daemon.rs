@@ -51,9 +51,12 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     loop {
         let mut start = Instant::now();
 
-        let updates_with_height = rx.recv().await.ok_or(Error::new(AppError::StreamReceiveEmpty(
-            "There aren't any blockchain updates.".to_string(),
-        )))?;
+        let updates_with_height =
+            rx.recv()
+                .await
+                .ok_or(Error::new(AppError::StreamReceiveEmpty(
+                    "There aren't any blockchain updates.".to_string(),
+                )))?;
 
         info!(
             APP_LOG,
@@ -113,8 +116,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
             info!(
                 APP_LOG,
-                "Updates were processed in {} secs. Last updated height is {}.",
-                start.elapsed().as_secs(),
+                "Updates were processed in {:?}. Last updated height is {}.",
+                start.elapsed(),
                 updates_with_height.last_height
             );
 
