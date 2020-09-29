@@ -29,7 +29,6 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     dbw: Arc<U>,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
-    addresses_white_list: Vec<String>,
 ) -> Result<()> {
     let starting_from_height = match dbw.get_prev_handled_height()? {
         Some(prev_handled_height) => {
@@ -104,17 +103,11 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                 .try_fold((), |_, update_item| match update_item {
                     UpdatesItem::Blocks(bs) => {
                         squash_microblocks(dbw.clone())?;
-                        append_blocks_or_microblocks(
-                            dbw.clone(),
-                            bs.as_ref(),
-                            &addresses_white_list,
-                        )
+                        append_blocks_or_microblocks(dbw.clone(), bs.as_ref())
                     }
-                    UpdatesItem::Microblock(mba) => append_blocks_or_microblocks(
-                        dbw.clone(),
-                        &vec![mba.to_owned()],
-                        &addresses_white_list,
-                    ),
+                    UpdatesItem::Microblock(mba) => {
+                        append_blocks_or_microblocks(dbw.clone(), &vec![mba.to_owned()])
+                    }
                     UpdatesItem::Rollback(sig) => {
                         let block_uid = dbw.clone().get_block_uid(&sig)?;
                         rollback(dbw.clone(), block_uid)
@@ -176,7 +169,6 @@ fn rollback<U: DataEntriesRepo>(dbw: Arc<U>, block_uid: i64) -> Result<()> {
 fn append_blocks_or_microblocks<U: DataEntriesRepo>(
     dbw: Arc<U>,
     appends: &Vec<BlockMicroblockAppend>,
-    addresses_white_list: &Vec<String>,
 ) -> Result<()> {
     let block_uids = dbw.insert_blocks_or_microblocks(
         &appends
@@ -198,7 +190,6 @@ fn append_blocks_or_microblocks<U: DataEntriesRepo>(
                 .data_entries
                 .clone()
                 .into_iter()
-                .filter(|de| addresses_white_list.contains(&de.address))
                 .map(|de| BlockUidWithDataEntry {
                     block_uid: block_uid.to_owned(),
                     data_entry: de,

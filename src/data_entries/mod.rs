@@ -22,7 +22,6 @@ pub struct Config {
     pub blockchain_updates_url: String,
     pub updates_per_request: usize,
     pub max_wait_time_in_secs: u64,
-    pub addresses_white_list: Vec<String>
 }
 
 #[derive(Clone, Debug)]
