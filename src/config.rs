@@ -36,6 +36,7 @@ struct ConfigFlat {
     pub updates_per_request: usize,
     #[serde(default = "default_max_wait_time_in_secs")]
     pub max_wait_time_in_secs: u64,
+    pub addresses_white_list: Vec<String>
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +64,7 @@ pub fn load() -> Result<Config> {
             blockchain_updates_url: config_flat.blockchain_updates_url,
             updates_per_request: config_flat.updates_per_request,
             max_wait_time_in_secs: config_flat.max_wait_time_in_secs,
+            addresses_white_list: config_flat.addresses_white_list,
         },
         postgres: PostgresConfig {
             host: config_flat.pghost,
