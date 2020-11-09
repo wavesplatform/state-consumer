@@ -34,37 +34,6 @@ pub struct DataEntry {
     pub value_string: Option<String>,
 }
 
-// "height": 0,
-// "version": 0,
-// "type": 0,
-// "id": "string",
-// "sender": "string",
-// "senderPublicKey": "string",
-// "feeAsset": "string",
-// "fee": 0,
-// "timestamp": "2020-11-06T10:26:42.332Z",
-// "signature": "string",
-// "proofs": [
-//   "string"
-// ],
-// "recipient": "string",
-// "assetId": "string",
-// "amount": 0,
-// "attachment": "string"
-
-// #[derive(Clone, Debug)]
-// pub struct Transfer {
-//     pub height: i64,
-//     pub version: i8,
-//     pub type_: i8,
-//     pub id: String,
-//     pub sender: String,
-//     pub senderPublicKey: String,
-//     pub fee_asset: String,
-//     pub fee: f64,
-//     pub signature: String,
-// }
-
 impl PartialEq for DataEntry {
     fn eq(&self, other: &DataEntry) -> bool {
         (&self.address, &self.key) == (&other.address, &other.key)
@@ -183,35 +152,11 @@ pub struct BlockMicroblock {
 }
 
 #[derive(Clone, Debug)]
-pub struct Transfer {
-    pub type_: TxType,
-    pub sender_public_key: String,
-    pub asset_id: String,
-    pub timestamp: i64,
-    pub recipient_address: String,
-    // recipient_public_key: String,
-    // recipient_alias: String,
-    pub amount: i64,
-}
-
-#[derive(Clone, Debug)]
-pub enum TxType {
-    Invoke,
-    MassTranfer,
-    Payment,
-    Transfer,
-}
-
-#[derive(Clone, Debug)]
-pub struct Transfers(Vec<Transfer>);
-
-#[derive(Clone, Debug)]
 pub struct BlockMicroblockAppend {
     id: String,
     time_stamp: Option<i64>,
     height: u32,
     data_entries: Vec<DataEntry>,
-    transfers: Vec<Transfer>,
 }
 
 #[derive(Clone, Debug)]
