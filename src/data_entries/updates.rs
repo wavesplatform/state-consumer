@@ -1,6 +1,6 @@
 use super::{
     BlockMicroblockAppend, BlockchainUpdate, BlockchainUpdatesWithLastHeight, DataEntriesSource,
-    DataEntry,
+    Transfer, Transfers,
 };
 use crate::error::AppError;
 use anyhow::Result;
@@ -20,6 +20,9 @@ use waves_protobuf_schemas::waves::{
         },
         BlockchainUpdated,
     },
+    transaction::Data,
+    InvokeScriptTransactionData, MassTransferTransactionData, PaymentTransactionData,
+    SignedTransaction, Transaction, TransferTransactionData,
 };
 
 #[derive(Clone)]
@@ -124,10 +127,53 @@ impl DataEntriesSource for DataEntriesSourceImpl {
     }
 }
 
+impl From<SignedTransaction> for Transfers {
+    fn from(tx: SignedTransaction) -> Transfers {
+        tx.transaction
+            .and_then(|transaction| {
+                let Transaction {
+                    chain_id,
+                    sender_public_key,
+                    fee,
+                    timestamp,
+                    version,
+                    data,
+                } = transaction;
+
+                data.map(|data| match data {
+                    Data::InvokeScript(InvokeScriptTransactionData {
+                        d_app, payments, ..
+                    }) => unimplemented!(),
+
+                    Data::Payment(PaymentTransactionData {
+                        recipient_address,
+                        amount,
+                        ..
+                    }) => unimplemented!(),
+
+                    Data::Transfer(TransferTransactionData {
+                        recipient, amount, ..
+                    }) => unimplemented!(),
+
+                    Data::MassTransfer(MassTransferTransactionData {
+                        transfers,
+                        asset_id,
+                        ..
+                    }) => unimplemented!(),
+
+                    _ => vec![],
+                })
+            })
+            .map_or_else(|| Transfers(vec![]), Transfers)
+    }
+}
+
 impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
     type Error = AppError;
 
     fn try_from(value: BlockchainUpdated) -> Result<Self, Self::Error> {
+        use BlockchainUpdate::{Block, Microblock, Rollback};
+
         match value.update {
             Some(Update::Append(Append {
                 body,
@@ -137,76 +183,62 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
             })) => {
                 let height = value.height;
 
-                let data_entries = transaction_state_updates
-                    .iter()
-                    .enumerate()
-                    .flat_map::<Vec<DataEntry>, _>(|(idx, su)| {
-                        su.data_entries
-                            .iter()
-                            .map(|de| {
-                                let deu = de.data_entry.as_ref().unwrap();
-
-                                let mut value_string: Option<String> = None;
-                                let mut value_integer: Option<i64> = None;
-                                let mut value_bool: Option<bool> = None;
-                                let mut value_binary: Option<Vec<u8>> = None;
-
-                                match deu.value.as_ref() {
-                                    Some(value) => match value {
-                                        Value::IntValue(v) => value_integer = Some(v.to_owned()),
-                                        Value::BoolValue(v) => value_bool = Some(v.to_owned()),
-                                        Value::BinaryValue(v) => value_binary = Some(v.to_owned()),
-                                        Value::StringValue(v) => {
-                                            value_string = Some(v.replace("\0", "\\0").to_owned())
-                                        }
-                                    },
-                                    None => {}
-                                }
-
-                                DataEntry {
-                                    address: bs58::encode(&de.address).into_string(),
-                                    // nul symbol is badly processed at least by PostgreSQL
-                                    // so escape this for safety
-                                    key: de
-                                        .data_entry
-                                        .as_ref()
-                                        .unwrap()
-                                        .key
-                                        .clone()
-                                        .replace("\0", "\\0"),
-                                    transaction_id: bs58::encode(
-                                        &transaction_ids.get(idx).unwrap(),
-                                    )
-                                    .into_string(),
-                                    value_binary: value_binary,
-                                    value_bool: value_bool,
-                                    value_integer: value_integer,
-                                    value_string: value_string,
-                                }
+                let txs: Vec<SignedTransaction> = match body {
+                    Some(Body::Block(BlockAppend { ref block, .. })) => {
+                        Ok(block.clone().map(|it| it.transactions))
+                    }
+                    Some(Body::MicroBlock(MicroBlockAppend {
+                        ref micro_block, ..
+                    })) => Ok(micro_block
+                        .clone()
+                        .and_then(|it| it.micro_block.map(|it| it.transactions))),
+                    _ => Err(AppError::InvalidMessage(
+                        "Append body is empty.".to_string(),
+                    )),
+                }
+                .map_or_else(
+                    |_| vec![],
+                    |txs| {
+                        txs.iter()
+                            .filter_map(|tx| match tx {
+                                InvokeScriptTransactionData => None,
+                                MassTransferTransactionData => None,
+                                PaymentTransactionData => None,
+                                TransferTransactionData => None,
                             })
                             .collect()
+                    },
+                );
+
+                let transfers: Vec<Transfer> = txs
+                    .into_iter()
+                    .flat_map(|tx| {
+                        let t: Transfers = tx.into();
+                        t.0
                     })
                     .collect();
 
                 match body {
                     Some(Body::Block(BlockAppend { block, .. })) => {
-                        Ok(BlockchainUpdate::Block(BlockMicroblockAppend {
+                        Ok(Block(BlockMicroblockAppend {
                             id: bs58::encode(&value.id).into_string(),
                             time_stamp: block
                                 .clone()
                                 .map(|b| b.header.map(|h| Some(h.timestamp)).unwrap_or(None))
                                 .unwrap_or(None),
                             height: height as u32,
-                            data_entries: data_entries,
+                            data_entries: vec![],
+                            transfers,
                         }))
                     }
                     Some(Body::MicroBlock(MicroBlockAppend { micro_block, .. })) => {
-                        Ok(BlockchainUpdate::Microblock(BlockMicroblockAppend {
+                        Ok(Microblock(BlockMicroblockAppend {
                             id: bs58::encode(&micro_block.as_ref().unwrap().total_block_id)
                                 .into_string(),
                             time_stamp: None,
                             height: height as u32,
-                            data_entries: data_entries,
+                            data_entries: vec![],
+                            transfers,
                         }))
                     }
                     _ => Err(AppError::InvalidMessage(
@@ -214,9 +246,7 @@ impl TryFrom<BlockchainUpdated> for BlockchainUpdate {
                     )),
                 }
             }
-            Some(Update::Rollback(_)) => Ok(BlockchainUpdate::Rollback(
-                bs58::encode(&value.id).into_string(),
-            )),
+            Some(Update::Rollback(_)) => Ok(Rollback(bs58::encode(&value.id).into_string())),
             _ => Err(AppError::InvalidMessage(
                 "Unknown blockchain update.".to_string(),
             )),
