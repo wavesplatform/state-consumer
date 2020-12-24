@@ -136,7 +136,7 @@ fn extract_string_fragment(values: &Vec<(&str, &str)>, position: usize) -> Optio
     })
 }
 
-fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Option<i32> {
+fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Option<i64> {
     values.get(position).map_or(None, |(t, v)| {
         if *t == INTEGER_DESCRIPTOR {
             v.parse().ok()
