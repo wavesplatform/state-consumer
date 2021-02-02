@@ -1,6 +1,6 @@
 [package]
 name = "state-daemon"
-version = "0.1.0"
+version = "1.1.0"
 authors = ["Аleksej Petrov <apetrov@web3tech.ru>"]
 edition = "2018"
 
