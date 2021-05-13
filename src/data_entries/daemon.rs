@@ -51,12 +51,9 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     loop {
         let mut start = Instant::now();
 
-        let updates_with_height =
-            rx.recv()
-                .await
-                .ok_or(Error::new(AppError::StreamReceiveEmpty(
-                    "There aren't any blockchain updates.".to_string(),
-                )))?;
+        let updates_with_height = rx.recv().await.ok_or(Error::new(AppError::StreamClosed(
+            "GRPC Stream was closed by the server".to_string(),
+        )))?;
 
         info!(
             APP_LOG,
