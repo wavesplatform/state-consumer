@@ -38,7 +38,7 @@ impl DataEntriesSourceImpl {
     async fn run(
         &self,
         mut stream: tonic::Streaming<SubscribeEvent>,
-        mut tx: Sender<BlockchainUpdatesWithLastHeight>,
+        tx: Sender<BlockchainUpdatesWithLastHeight>,
         from_height: u32,
         batch_max_size: usize,
         batch_max_wait_time: Duration,
@@ -50,34 +50,30 @@ impl DataEntriesSourceImpl {
         let mut should_receive_more = true;
 
         loop {
-            match stream.message().await? {
-                Some(SubscribeEvent {
-                    update: Some(update),
-                }) => Ok({
-                    last_height = update.height as u32;
-                    match BlockchainUpdate::try_from(update) {
-                        Ok(upd) => Ok({
-                            result.push(upd.clone());
-                            match upd {
-                                BlockchainUpdate::Block(_) => {
-                                    if result.len() >= batch_max_size
-                                        || start.elapsed().ge(&batch_max_wait_time)
-                                    {
-                                        should_receive_more = false;
-                                    }
-                                }
-                                BlockchainUpdate::Microblock(_) | BlockchainUpdate::Rollback(_) => {
-                                    should_receive_more = false
+            if let Some(SubscribeEvent {
+                update: Some(update),
+            }) = stream.message().await?
+            {
+                last_height = update.height as u32;
+                match BlockchainUpdate::try_from(update) {
+                    Ok(upd) => Ok({
+                        result.push(upd.clone());
+                        match upd {
+                            BlockchainUpdate::Block(_) => {
+                                if result.len() >= batch_max_size
+                                    || start.elapsed().ge(&batch_max_wait_time)
+                                {
+                                    should_receive_more = false;
                                 }
                             }
-                        }),
-                        Err(err) => Err(err),
-                    }?;
-                }),
-                _ => Err(AppError::StreamReceiveEmpty(
-                    "Empty message was received from the node.".to_string(),
-                )),
-            }?;
+                            BlockchainUpdate::Microblock(_) | BlockchainUpdate::Rollback(_) => {
+                                should_receive_more = false
+                            }
+                        }
+                    }),
+                    Err(err) => Err(err),
+                }?;
+            }
 
             if !should_receive_more {
                 tx.send(BlockchainUpdatesWithLastHeight {

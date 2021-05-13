@@ -20,8 +20,8 @@ pub enum AppError {
     SendError(#[from] tokio::sync::mpsc::error::SendError<BlockchainUpdatesWithLastHeight>),
     #[error("JoinError: {0}")]
     JoinError(#[from] tokio::task::JoinError),
-    #[error("StreamReceiveEmpty: {0}")]
-    StreamReceiveEmpty(String),
+    #[error("StreamClosed: {0}")]
+    StreamClosed(String),
 }
 
 impl Into<String> for AppError {
