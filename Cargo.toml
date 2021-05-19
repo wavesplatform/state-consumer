@@ -1,6 +1,6 @@
 [package]
-name = "state-daemon"
-version = "1.1.0"
+name = "state-consumer"
+version = "1.1.1"
 authors = ["Аleksej Petrov <apetrov@web3tech.ru>"]
 edition = "2018"
 
@@ -10,9 +10,9 @@ edition = "2018"
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4" }
 envy = "0.4"
-tonic = "0.2"
-tokio = { version = "0.2", features = ["full", "rt-threaded"] }
-waves-protobuf-schemas = { git = "https://github.com/wavesplatform/protobuf-schemas", branch = "blockchain-updates-from-1.2.6" }
+tonic = "0.4"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+waves-protobuf-schemas = { git = "https://github.com/wavesplatform/protobuf-schemas", rev = "b68a38cf6f89cd0b1b94c417da6217fd7a170de5" }
 slog = "2.5"
 slog-term = "2.6"
 slog-async = "2.5"
