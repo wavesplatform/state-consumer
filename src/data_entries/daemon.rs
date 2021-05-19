@@ -220,22 +220,11 @@ fn append_data_entries<U: DataEntriesRepo>(
                 data_entry,
             },
         )| {
-            let key = &data_entry.key;
-            let mut frs = key.split(FRAGMENT_SEPARATOR).into_iter();
-
-            let types = frs
-                .next()
-                .map(|fragment| {
-                    fragment
-                        .split("%")
-                        .into_iter()
-                        .skip(1) // first item is empty
-                        .collect()
-                })
-                .unwrap_or(vec![]);
-
-            let values = types.into_iter().zip(frs).collect();
-
+            let key_fragments = split_to_fragments(&data_entry.key);
+            let value_fragments = match data_entry.value_string.as_ref() {
+                Some(value) => split_to_fragments(value),
+                _ => vec![],
+            };
             InsertableDataEntry {
                 block_uid: block_uid,
                 transaction_id: data_entry.transaction_id.clone(),
@@ -247,28 +236,50 @@ fn append_data_entries<U: DataEntriesRepo>(
                 value_bool: data_entry.value_bool,
                 value_integer: data_entry.value_integer,
                 value_string: data_entry.value_string.clone(),
-                fragment_0_integer: extract_integer_fragment(&values, 0),
-                fragment_0_string: extract_string_fragment(&values, 0),
-                fragment_1_integer: extract_integer_fragment(&values, 1),
-                fragment_1_string: extract_string_fragment(&values, 1),
-                fragment_2_integer: extract_integer_fragment(&values, 2),
-                fragment_2_string: extract_string_fragment(&values, 2),
-                fragment_3_integer: extract_integer_fragment(&values, 3),
-                fragment_3_string: extract_string_fragment(&values, 3),
-                fragment_4_integer: extract_integer_fragment(&values, 4),
-                fragment_4_string: extract_string_fragment(&values, 4),
-                fragment_5_integer: extract_integer_fragment(&values, 5),
-                fragment_5_string: extract_string_fragment(&values, 5),
-                fragment_6_integer: extract_integer_fragment(&values, 6),
-                fragment_6_string: extract_string_fragment(&values, 6),
-                fragment_7_integer: extract_integer_fragment(&values, 7),
-                fragment_7_string: extract_string_fragment(&values, 7),
-                fragment_8_integer: extract_integer_fragment(&values, 8),
-                fragment_8_string: extract_string_fragment(&values, 8),
-                fragment_9_integer: extract_integer_fragment(&values, 9),
-                fragment_9_string: extract_string_fragment(&values, 9),
-                fragment_10_integer: extract_integer_fragment(&values, 10),
-                fragment_10_string: extract_string_fragment(&values, 10),
+                fragment_0_integer: extract_integer_fragment(&key_fragments, 0),
+                fragment_0_string: extract_string_fragment(&key_fragments, 0),
+                fragment_1_integer: extract_integer_fragment(&key_fragments, 1),
+                fragment_1_string: extract_string_fragment(&key_fragments, 1),
+                fragment_2_integer: extract_integer_fragment(&key_fragments, 2),
+                fragment_2_string: extract_string_fragment(&key_fragments, 2),
+                fragment_3_integer: extract_integer_fragment(&key_fragments, 3),
+                fragment_3_string: extract_string_fragment(&key_fragments, 3),
+                fragment_4_integer: extract_integer_fragment(&key_fragments, 4),
+                fragment_4_string: extract_string_fragment(&key_fragments, 4),
+                fragment_5_integer: extract_integer_fragment(&key_fragments, 5),
+                fragment_5_string: extract_string_fragment(&key_fragments, 5),
+                fragment_6_integer: extract_integer_fragment(&key_fragments, 6),
+                fragment_6_string: extract_string_fragment(&key_fragments, 6),
+                fragment_7_integer: extract_integer_fragment(&key_fragments, 7),
+                fragment_7_string: extract_string_fragment(&key_fragments, 7),
+                fragment_8_integer: extract_integer_fragment(&key_fragments, 8),
+                fragment_8_string: extract_string_fragment(&key_fragments, 8),
+                fragment_9_integer: extract_integer_fragment(&key_fragments, 9),
+                fragment_9_string: extract_string_fragment(&key_fragments, 9),
+                fragment_10_integer: extract_integer_fragment(&key_fragments, 10),
+                fragment_10_string: extract_string_fragment(&key_fragments, 10),
+                value_fragment_0_integer: extract_integer_fragment(&value_fragments, 0),
+                value_fragment_0_string: extract_string_fragment(&value_fragments, 0),
+                value_fragment_1_integer: extract_integer_fragment(&value_fragments, 1),
+                value_fragment_1_string: extract_string_fragment(&value_fragments, 1),
+                value_fragment_2_integer: extract_integer_fragment(&value_fragments, 2),
+                value_fragment_2_string: extract_string_fragment(&value_fragments, 2),
+                value_fragment_3_integer: extract_integer_fragment(&value_fragments, 3),
+                value_fragment_3_string: extract_string_fragment(&value_fragments, 3),
+                value_fragment_4_integer: extract_integer_fragment(&value_fragments, 4),
+                value_fragment_4_string: extract_string_fragment(&value_fragments, 4),
+                value_fragment_5_integer: extract_integer_fragment(&value_fragments, 5),
+                value_fragment_5_string: extract_string_fragment(&value_fragments, 5),
+                value_fragment_6_integer: extract_integer_fragment(&value_fragments, 6),
+                value_fragment_6_string: extract_string_fragment(&value_fragments, 6),
+                value_fragment_7_integer: extract_integer_fragment(&value_fragments, 7),
+                value_fragment_7_string: extract_string_fragment(&value_fragments, 7),
+                value_fragment_8_integer: extract_integer_fragment(&value_fragments, 8),
+                value_fragment_8_string: extract_string_fragment(&value_fragments, 8),
+                value_fragment_9_integer: extract_integer_fragment(&value_fragments, 9),
+                value_fragment_9_string: extract_string_fragment(&value_fragments, 9),
+                value_fragment_10_integer: extract_integer_fragment(&value_fragments, 10),
+                value_fragment_10_string: extract_string_fragment(&value_fragments, 10),
             }
         },
     );
@@ -334,6 +345,23 @@ fn append_data_entries<U: DataEntriesRepo>(
     dbw.insert_data_entries(updates_with_uids_superseded_by)?;
 
     dbw.set_next_update_uid(next_uid + updates_count)
+}
+
+fn split_to_fragments(value: &String) -> Vec<(&str, &str)> {
+    let mut frs = value.split(FRAGMENT_SEPARATOR).into_iter();
+
+    let types = frs
+        .next()
+        .map(|fragment| {
+            fragment
+                .split("%")
+                .into_iter()
+                .skip(1) // first item is empty
+                .collect()
+        })
+        .unwrap_or(vec![]);
+
+    types.into_iter().zip(frs).collect()
 }
 
 fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<U>) -> Result<()> {
