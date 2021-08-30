@@ -1,0 +1,1 @@
+drop table data_entries_history_keys;

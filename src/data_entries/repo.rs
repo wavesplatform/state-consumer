@@ -1,11 +1,12 @@
 use super::{
-    BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry,
+    BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertedDataEntry, InsertableDataEntry,
     PrevHandledHeight,
 };
 use crate::error::AppError;
 use crate::schema::blocks_microblocks;
 use crate::schema::blocks_microblocks::dsl::*;
 use crate::schema::data_entries;
+use crate::schema::data_entries_history_keys;
 use crate::schema::data_entries_uid_seq;
 use crate::schema::data_entries_uid_seq::dsl::*;
 use anyhow::{Error, Result};
@@ -106,8 +107,43 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .chunks(chunk_size)
             .into_iter()
             .try_fold((), |_, chunk| {
+                let mut  recs : Vec<_> = vec![];
+                let mut  hist_uids : Vec<_> = vec![];
+
                 diesel::insert_into(data_entries::table)
                     .values(chunk)
+                    .returning((data_entries::address, data_entries::key, data_entries::uid, data_entries::block_uid))
+                    .get_results(&self.conn)
+                    .map(|rows: Vec<(String, String, i64, i64)>| {
+                        recs = rows.into_iter()
+                                .map(|(address, key, data_entry_uid, block_uid)| InsertedDataEntry {
+                                    address: address,
+                                    key: key,
+                                    data_entry_uid: data_entry_uid,
+                                    block_uid: block_uid,
+                                    height: None,
+                                    block_timestamp: None
+                                }).collect();
+
+                    })
+                    .map_err(|err| Error::new(AppError::DbError(err)))?;
+                
+                diesel::insert_into(data_entries_history_keys::table)
+                    .values(recs)
+                    .returning(data_entries_history_keys::uid)
+                    .get_results(&self.conn)
+                    .map(|r: Vec<i64>| {
+                        hist_uids = r;
+                    })
+                    .map_err(|err| Error::new(AppError::DbError(err)))?;
+                
+                diesel::sql_query(r#"
+                        update data_entries_history_keys hk set 
+                            height = (select height from blocks_microblocks where uid = hk.block_uid),
+                            block_timestamp = (select to_timestamp(time_stamp / 1000) from blocks_microblocks where uid = hk.block_uid)
+                        where hk.uid  = ANY($1)
+                    "#)
+                    .bind::<Array<BigInt>, _>(hist_uids)
                     .execute(&self.conn)
                     .map(|_| ())
                     .map_err(|err| Error::new(AppError::DbError(err)))
