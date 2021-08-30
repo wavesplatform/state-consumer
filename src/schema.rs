@@ -71,3 +71,16 @@ table! {
         value_fragment_10_string -> Nullable<Varchar>,
     }
 }
+
+table! {
+    data_entries_history_keys (uid) {
+        uid -> Int8,
+        block_uid -> Int8,
+        height -> Nullable<Int4>,
+        data_entry_uid -> Int8,
+        address -> Text,
+        key -> Text,
+        block_timestamp -> Nullable<Timestamp>,
+    }
+}  
+
