@@ -15,6 +15,7 @@ from data_entries d
 where (d.value_binary IS NOT NULL OR d.value_bool IS NOT NULL OR d.value_integer IS NOT NULL OR d.value_string IS NOT NULL)
 ;
 
+create index data_entries_history_keys_block_uid_idx on data_entries_history_keys (block_uid);
 alter table data_entries_history_keys add foreign key (block_uid) references blocks_microblocks(uid) on delete cascade;
 
 create index "data_entries_history_keys_stamp_idx" on data_entries_history_keys(address, key, block_timestamp desc, data_entry_uid desc);
