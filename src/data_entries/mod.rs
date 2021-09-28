@@ -3,6 +3,7 @@ pub mod repo;
 pub mod updates;
 
 use crate::schema::blocks_microblocks;
+use crate::schema::data_entries_history_keys;
 use crate::schema::data_entries;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,6 +12,7 @@ use diesel::{Insertable, Queryable};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
+use chrono::{NaiveDateTime};
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
 pub const STRING_DESCRIPTOR: &str = "s";
@@ -138,6 +140,16 @@ pub struct DeletedDataEntry {
     pub uid: i64,
     pub address: String,
     pub key: String,
+}
+#[derive(Clone, Debug, Insertable, QueryableByName)]
+#[table_name = "data_entries_history_keys"]
+pub struct InsertedDataEntry {
+    pub address: String,
+    pub key: String,
+    pub data_entry_uid: i64,
+    pub block_uid: i64,
+    pub height: Option<i32>,
+    pub block_timestamp: Option<NaiveDateTime>,
 }
 
 impl PartialEq for DeletedDataEntry {
