@@ -1,15 +1,16 @@
-use super::{
-    BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, DataEntriesRepo, DataEntriesSource,
-    DataEntry, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, FRAGMENT_SEPARATOR,
-    INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
-};
-use crate::error::AppError;
 use anyhow::{Error, Result};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wavesexchange_log::info;
+
+use super::{
+    BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, DataEntriesRepo, DataEntriesSource,
+    DataEntry, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, FRAGMENT_SEPARATOR,
+    INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
+};
+use crate::error::AppError;
 
 enum UpdatesItem {
     Blocks(Vec<BlockMicroblockAppend>),
@@ -31,7 +32,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 ) -> Result<()> {
     let starting_from_height = match dbw.get_prev_handled_height()? {
         Some(prev_handled_height) => {
-            rollback(dbw.clone(), prev_handled_height.uid)?;
+            dbw.transaction(|| rollback(dbw.clone(), prev_handled_height.uid))?;
             prev_handled_height.height as u32 + 1
         }
         None => 1u32,
