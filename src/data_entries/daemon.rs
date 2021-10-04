@@ -1,16 +1,16 @@
+use anyhow::{Error, Result};
+use itertools::Itertools;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use wavesexchange_log::info;
+
 use super::{
     BlockMicroblock, BlockMicroblockAppend, BlockchainUpdate, DataEntriesRepo, DataEntriesSource,
     DataEntry, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, FRAGMENT_SEPARATOR,
     INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
 use crate::error::AppError;
-use crate::log::APP_LOG;
-use anyhow::{Error, Result};
-use itertools::Itertools;
-use slog::info;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 enum UpdatesItem {
     Blocks(Vec<BlockMicroblockAppend>),
@@ -32,15 +32,15 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 ) -> Result<()> {
     let starting_from_height = match dbw.get_prev_handled_height()? {
         Some(prev_handled_height) => {
-            rollback(dbw.clone(), prev_handled_height.uid)?;
+            dbw.transaction(|| rollback(dbw.clone(), prev_handled_height.uid))?;
             prev_handled_height.height as u32 + 1
         }
         None => 1u32,
     };
 
     info!(
-        APP_LOG,
-        "Fetching block updates from height {}.", starting_from_height
+        "Fetching block updates from height {}.",
+        starting_from_height
     );
     let max_duration = Duration::from_secs(max_wait_time_in_secs);
 
@@ -56,7 +56,6 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
         )))?;
 
         info!(
-            APP_LOG,
             "{} block updates were received in {:?}",
             updates_with_height.updates.len(),
             start.elapsed()
@@ -112,7 +111,6 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                 })?;
 
             info!(
-                APP_LOG,
                 "Updates were processed in {:?}. Last updated height is {}.",
                 start.elapsed(),
                 updates_with_height.last_height
