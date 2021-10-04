@@ -204,7 +204,16 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .filter(data_entries::block_uid.gt(block_uid))
             .execute(&self.conn)
             .map(|_| ())
-            .map_err(|err| Error::new(AppError::DbError(err)))
+            .map_err(|err| Error::new(AppError::DbError(err)))?;
+
+        diesel::update(data_entries_history_keys::table)
+            .set(data_entries_history_keys::block_uid.eq(block_uid))
+            .filter(data_entries_history_keys::block_uid.gt(block_uid))
+            .execute(&self.conn)
+            .map(|_| ())
+            .map_err(|err| Error::new(AppError::DbError(err)))?;
+
+            Ok(())
     }
 
     fn delete_microblocks(&self) -> Result<()> {
