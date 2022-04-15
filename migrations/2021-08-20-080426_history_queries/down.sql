@@ -1,1 +1,1 @@
-drop table data_entries_history_keys;
+DROP TABLE IF EXISTS data_entries_history_keys;
