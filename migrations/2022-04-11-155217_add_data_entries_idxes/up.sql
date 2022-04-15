@@ -1,0 +1,2 @@
+CREATE INDEX "data_entries_addr_uid_part" ON data_entries(address, uid) WHERE superseded_by = 9223372036854775806 AND (value_binary IS NOT NULL OR value_bool IS NOT NULL OR value_integer IS NOT NULL OR value_string IS NOT NULL);
+CREATE INDEX "data_entries_uid_parts" ON data_entries(uid) WHERE superseded_by = 9223372036854775806 AND (value_binary IS NOT NULL OR value_bool IS NOT NULL OR value_integer IS NOT NULL OR value_string IS NOT NULL);
