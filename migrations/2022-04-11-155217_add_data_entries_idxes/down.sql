@@ -1,1 +1,2 @@
--- This file should undo anything in `up.sql`
+DROP INDEX IF EXISTS "data_entries_addr_uid_part";
+DROP INDEX IF EXISTS "data_entries_uid_parts";
