@@ -2,7 +2,7 @@
 name = "state-consumer"
 version = "1.1.1"
 authors = ["Аleksej Petrov <apetrov@web3tech.ru>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
