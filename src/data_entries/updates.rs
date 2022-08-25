@@ -109,7 +109,7 @@ impl DataEntriesSource for DataEntriesSourceImpl {
             .await?
             .into_inner();
 
-        let (tx, rx) = channel::<BlockchainUpdatesWithLastHeight>(batch_max_size);
+        let (tx, rx) = channel::<BlockchainUpdatesWithLastHeight>(1);
 
         tokio::spawn(async move {
             self.run(stream, tx, from_height, batch_max_size, batch_max_wait_time)
