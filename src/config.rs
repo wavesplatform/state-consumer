@@ -6,6 +6,10 @@ fn default_port() -> u16 {
     8080
 }
 
+fn default_metrics_port() -> u16 {
+    9090
+}
+
 fn default_pgport() -> u16 {
     5432
 }
@@ -16,10 +20,6 @@ fn default_updates_per_request() -> usize {
 
 fn default_max_wait_time_in_secs() -> u64 {
     5
-}
-
-fn default_metrics_port() -> u16 {
-    9090
 }
 
 #[derive(Deserialize, Debug, Clone)]
