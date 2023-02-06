@@ -6,6 +6,10 @@ fn default_port() -> u16 {
     8080
 }
 
+fn default_metrics_port() -> u16 {
+    9090
+}
+
 fn default_pgport() -> u16 {
     5432
 }
@@ -21,26 +25,29 @@ fn default_max_wait_time_in_secs() -> u64 {
 #[derive(Deserialize, Debug, Clone)]
 struct ConfigFlat {
     #[serde(default = "default_port")]
-    pub port: u16,
+    port: u16,
+    #[serde(default = "default_metrics_port")]
+    metrics_port: u16,
 
     // service's postgres
-    pub pghost: String,
+    pghost: String,
     #[serde(default = "default_pgport")]
-    pub pgport: u16,
-    pub pgdatabase: String,
-    pub pguser: String,
-    pub pgpassword: String,
+    pgport: u16,
+    pgdatabase: String,
+    pguser: String,
+    pgpassword: String,
 
-    pub blockchain_updates_url: String,
+    blockchain_updates_url: String,
     #[serde(default = "default_updates_per_request")]
-    pub updates_per_request: usize,
+    updates_per_request: usize,
     #[serde(default = "default_max_wait_time_in_secs")]
-    pub max_wait_time_in_secs: u64,
+    max_wait_time_in_secs: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub port: u16,
+    pub metrics_port: u16,
     pub data_entries: data_entries::Config,
     pub postgres: PostgresConfig,
 }
@@ -59,6 +66,7 @@ pub fn load() -> Result<Config> {
 
     Ok(Config {
         port: config_flat.port,
+        metrics_port: config_flat.metrics_port,
         data_entries: data_entries::Config {
             blockchain_updates_url: config_flat.blockchain_updates_url,
             updates_per_request: config_flat.updates_per_request,
