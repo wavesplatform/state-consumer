@@ -1,6 +1,6 @@
 [package]
 name = "state-consumer"
-version = "1.2.0"
+version = "1.3.0"
 authors = ["Аleksej Petrov <apetrov@web3tech.ru>"]
 edition = "2021"
 
