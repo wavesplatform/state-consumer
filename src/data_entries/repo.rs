@@ -37,14 +37,8 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f())
     }
 
-    fn get_prev_handled_height(
-        &self,
-        start_rollback_depth: u32,
-    ) -> Result<Option<PrevHandledHeight>> {
-        let sql_height = format!(
-            "(select max(height) - {} from blocks_microblocks)",
-            start_rollback_depth
-        );
+    fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>> {
+        let sql_height = format!("(select max(height) - {} from blocks_microblocks)", depth);
 
         blocks_microblocks
             .select((blocks_microblocks::uid, blocks_microblocks::height))

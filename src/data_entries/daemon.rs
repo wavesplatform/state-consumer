@@ -31,7 +31,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     max_wait_time_in_secs: u64,
     start_rollback_depth: u32,
 ) -> Result<()> {
-    let starting_from_height = match dbw.get_prev_handled_height(start_rollback_depth)? {
+    let starting_from_height = match dbw.get_handled_height(start_rollback_depth)? {
         Some(prev_handled_height) => {
             info!(
                 "rollback database to height: {} ",

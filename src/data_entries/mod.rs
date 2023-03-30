@@ -215,10 +215,7 @@ pub struct PrevHandledHeight {
 pub trait DataEntriesRepo {
     fn transaction(&self, f: impl FnOnce() -> Result<()>) -> Result<()>;
 
-    fn get_prev_handled_height(
-        &self,
-        start_rollback_depth: u32,
-    ) -> Result<Option<PrevHandledHeight>>;
+    fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 
