@@ -3,16 +3,16 @@ pub mod repo;
 pub mod updates;
 
 use crate::schema::blocks_microblocks;
-use crate::schema::data_entries_history_keys;
 use crate::schema::data_entries;
+use crate::schema::data_entries_history_keys;
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use diesel::sql_types::{BigInt, Nullable, Text};
 use diesel::{Insertable, Queryable};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
-use chrono::{NaiveDateTime};
 
 pub const FRAGMENT_SEPARATOR: &str = "__";
 pub const STRING_DESCRIPTOR: &str = "s";
@@ -215,7 +215,10 @@ pub struct PrevHandledHeight {
 pub trait DataEntriesRepo {
     fn transaction(&self, f: impl FnOnce() -> Result<()>) -> Result<()>;
 
-    fn get_prev_handled_height(&self) -> Result<Option<PrevHandledHeight>>;
+    fn get_prev_handled_height(
+        &self,
+        start_rollback_depth: u32,
+    ) -> Result<Option<PrevHandledHeight>>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 

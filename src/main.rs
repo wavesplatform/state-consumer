@@ -32,6 +32,7 @@ async fn main() -> Result<()> {
         data_entries_repo,
         config.data_entries.updates_per_request,
         config.data_entries.max_wait_time_in_secs,
+        config.start_rollback_depth,
     );
 
     let metrics = MetricsWarpBuilder::new()

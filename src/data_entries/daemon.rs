@@ -29,9 +29,15 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     dbw: Arc<U>,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
+    start_rollback_depth: u32,
 ) -> Result<()> {
-    let starting_from_height = match dbw.get_prev_handled_height()? {
+    let starting_from_height = match dbw.get_prev_handled_height(start_rollback_depth)? {
         Some(prev_handled_height) => {
+            info!(
+                "rollback database to height: {} ",
+                prev_handled_height.height
+            );
+
             dbw.transaction(|| rollback(dbw.clone(), prev_handled_height.uid))?;
             prev_handled_height.height as u32 + 1
         }
