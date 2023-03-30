@@ -22,6 +22,10 @@ fn default_max_wait_time_in_secs() -> u64 {
     5
 }
 
+fn default_start_rollback_depth() -> u32 {
+    1
+}
+
 #[derive(Deserialize, Debug, Clone)]
 struct ConfigFlat {
     #[serde(default = "default_port")]
@@ -42,6 +46,9 @@ struct ConfigFlat {
     updates_per_request: usize,
     #[serde(default = "default_max_wait_time_in_secs")]
     max_wait_time_in_secs: u64,
+
+    #[serde(default = "default_start_rollback_depth")]
+    start_rollback_depth: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +56,7 @@ pub struct Config {
     pub port: u16,
     pub metrics_port: u16,
     pub data_entries: data_entries::Config,
+    pub start_rollback_depth: u32,
     pub postgres: PostgresConfig,
 }
 
@@ -67,6 +75,7 @@ pub fn load() -> Result<Config> {
     Ok(Config {
         port: config_flat.port,
         metrics_port: config_flat.metrics_port,
+        start_rollback_depth: config_flat.start_rollback_depth,
         data_entries: data_entries::Config {
             blockchain_updates_url: config_flat.blockchain_updates_url,
             updates_per_request: config_flat.updates_per_request,

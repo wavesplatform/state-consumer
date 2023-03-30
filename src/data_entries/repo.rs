@@ -1,6 +1,6 @@
 use super::{
-    BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertedDataEntry, InsertableDataEntry,
-    PrevHandledHeight,
+    BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry,
+    InsertedDataEntry, PrevHandledHeight,
 };
 use crate::error::AppError;
 use crate::schema::blocks_microblocks;
@@ -37,13 +37,14 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
         self.conn.transaction(|| f())
     }
 
-    fn get_prev_handled_height(&self) -> Result<Option<PrevHandledHeight>> {
+    fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>> {
+        let sql_height = format!("(select max(height) - {} from blocks_microblocks)", depth);
+
         blocks_microblocks
             .select((blocks_microblocks::uid, blocks_microblocks::height))
             .filter(
-                blocks_microblocks::height.eq(diesel::expression::sql_literal::sql(
-                    "(select max(height) - 1 from blocks_microblocks)",
-                )),
+                blocks_microblocks::height
+                    .eq(diesel::expression::sql_literal::sql(sql_height.as_str())),
             )
             .order(blocks_microblocks::uid.asc())
             .first(&self.conn)
@@ -127,7 +128,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
 
                     })
                     .map_err(|err| Error::new(AppError::DbError(err)))?;
-                
+
                 diesel::insert_into(data_entries_history_keys::table)
                     .values(recs)
                     .returning(data_entries_history_keys::uid)
@@ -136,9 +137,9 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
                         hist_uids = r;
                     })
                     .map_err(|err| Error::new(AppError::DbError(err)))?;
-                
+
                 diesel::sql_query(r#"
-                        update data_entries_history_keys hk set 
+                        update data_entries_history_keys hk set
                             height = (select height from blocks_microblocks where uid = hk.block_uid),
                             block_timestamp = (select to_timestamp(time_stamp / 1000) from blocks_microblocks where uid = hk.block_uid)
                         where hk.uid  = ANY($1)
@@ -213,7 +214,7 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map(|_| ())
             .map_err(|err| Error::new(AppError::DbError(err)))?;
 
-            Ok(())
+        Ok(())
     }
 
     fn delete_microblocks(&self) -> Result<()> {
