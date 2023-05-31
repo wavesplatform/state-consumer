@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS data_entries (
 CREATE INDEX IF NOT EXISTS data_entries_block_uid_idx
 	ON data_entries (block_uid);
 
-CREATE INDEX IF NOT EXISTS IF NOT EXISTS data_entries_fragment_0_string_idx ON data_entries (fragment_0_string);
+CREATE INDEX IF NOT EXISTS data_entries_fragment_0_string_idx ON data_entries (fragment_0_string);
 CREATE INDEX IF NOT EXISTS data_entries_fragment_0_integer_idx ON data_entries (fragment_0_integer);
 CREATE INDEX IF NOT EXISTS data_entries_fragment_1_string_idx ON data_entries (fragment_1_string);
 CREATE INDEX IF NOT EXISTS data_entries_fragment_1_integer_idx ON data_entries (fragment_1_integer);
