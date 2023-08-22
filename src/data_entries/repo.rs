@@ -1,6 +1,6 @@
 use super::{
     BlockMicroblock, DataEntriesRepo, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry,
-    InsertedDataEntry, PrevHandledHeight,
+    InsertedDataEntry, LastBlockTimestamp, PrevHandledHeight,
 };
 use crate::error::AppError;
 use crate::schema::blocks_microblocks;
@@ -49,6 +49,17 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .order(blocks_microblocks::uid.asc())
             .first(&self.conn)
             .optional()
+            .map_err(|err| Error::new(AppError::DbError(err)))
+    }
+
+    fn get_last_block_timestamp(&self) -> Result<Option<LastBlockTimestamp>> {
+        blocks_microblocks
+            .select(blocks_microblocks::time_stamp)
+            .order(blocks_microblocks::uid.desc())
+            .filter(blocks_microblocks::time_stamp.is_not_null())
+            .first::<Option<i64>>(&self.conn)
+            .optional()
+            .map(|opt_ts| opt_ts.map(|ts| LastBlockTimestamp { time_stamp: ts }))
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 

@@ -29,11 +29,13 @@ async fn main() -> Result<()> {
 
     let consumer = data_entries::daemon::start(
         updates_repo,
-        data_entries_repo,
+        data_entries_repo.clone(),
         config.data_entries.updates_per_request,
         config.data_entries.max_wait_time_in_secs,
         config.start_rollback_depth,
     );
+
+    let api = data_entries::api::start(data_entries_repo.clone(), config.port);
 
     let metrics = MetricsWarpBuilder::new()
         .with_metrics_port(config.metrics_port)
@@ -44,7 +46,13 @@ async fn main() -> Result<()> {
             error!("{}", err);
             panic!("{}", err);
         },
-        _ = metrics => error!("metrics stopped")
+        Err(err) = api => {
+            error!("{}", err);
+            panic!("{}", err);
+        },
+        _ = metrics => {
+            error!("Metrics stopped");
+        }
     };
     Ok(())
 }
