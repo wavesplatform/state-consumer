@@ -15,7 +15,7 @@ use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SyncMode {
     Historical,
     Realtime,
@@ -61,10 +61,6 @@ async fn main() -> Result<()> {
             error!("{}", err);
             panic!("{}", err);
         },
-        // Err(err) = api => {
-        //     error!("{}", err);
-        //     panic!("{}", err);
-        // },
         _ = metrics => {
             error!("Metrics stopped");
         }
