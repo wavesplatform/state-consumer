@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use wavesexchange_warp::endpoints::liveness::Readiness;
 
-pub fn stream(
+pub fn channel(
     _repo: Arc<DataEntriesRepoImpl>,
     _sync_mode_rx: UnboundedReceiver<SyncMode>,
     _max_block_age: std::time::Duration,

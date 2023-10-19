@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
     let (sync_mode_tx, sync_mode_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let readiness_channel = readiness::stream(
+    let readiness_channel = readiness::channel(
         data_entries_repo.clone(),
         sync_mode_rx,
         std::time::Duration::from_secs(600),
