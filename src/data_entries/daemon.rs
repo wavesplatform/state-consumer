@@ -3,6 +3,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::UnboundedSender;
 use wavesexchange_log::info;
 
 use super::{
@@ -11,6 +12,7 @@ use super::{
     INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
 use crate::error::AppError;
+use crate::SyncMode;
 
 enum UpdatesItem {
     Blocks(Vec<BlockMicroblockAppend>),
@@ -30,6 +32,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
     start_rollback_depth: u32,
+    sync_mode_tx: UnboundedSender<SyncMode>,
 ) -> Result<()> {
     let starting_from_height = match dbw.get_handled_height(start_rollback_depth)? {
         Some(prev_handled_height) => {
@@ -53,6 +56,8 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
     let mut rx = updates_src
         .stream(starting_from_height, updates_per_request, max_duration)
         .await?;
+
+    sync_mode_tx.send(SyncMode::Historical).unwrap();
 
     loop {
         let mut start = Instant::now();
@@ -93,10 +98,12 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                         }
                     }
                     BlockchainUpdate::Microblock(mba) => {
+                        sync_mode_tx.send(SyncMode::Realtime).unwrap();
                         acc.push(UpdatesItem::Microblock(mba));
                         acc
                     }
                     BlockchainUpdate::Rollback(sig) => {
+                        sync_mode_tx.send(SyncMode::Historical).unwrap();
                         acc.push(UpdatesItem::Rollback(sig));
                         acc
                     }

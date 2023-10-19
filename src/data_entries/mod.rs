@@ -1,4 +1,3 @@
-pub mod api;
 pub mod daemon;
 pub mod repo;
 pub mod updates;

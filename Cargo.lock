@@ -1307,9 +1307,9 @@ dependencies = [
 
 [[package]]
 name = "serde_qs"
-version = "0.10.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cac3f1e2ca2fe333923a1ae72caca910b98ed0630bb35ef6f8c8517d6e81afa"
+checksum = "0431a35568651e363364210c91983c1da5eb29404d9f0928b67d4ebcfa7d330c"
 dependencies = [
  "percent-encoding",
  "serde",
@@ -2067,8 +2067,8 @@ dependencies = [
 
 [[package]]
 name = "wavesexchange_warp"
-version = "0.14.4"
-source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.4#f0848d001c4b60dde36004d434dd53cadc923311"
+version = "0.14.7"
+source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.7#da3f4c1f92fecc3d03f11b5008d55cbba07030b0"
 dependencies = [
  "futures",
  "lazy_static",
@@ -2077,6 +2077,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "thiserror",
+ "tokio",
  "warp",
  "wavesexchange_log",
 ]
