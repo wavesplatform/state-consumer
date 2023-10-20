@@ -223,7 +223,7 @@ pub trait DataEntriesRepo {
 
     fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>>;
 
-    fn get_last_block_timestamp(&self) -> Result<Option<LastBlockTimestamp>>;
+    fn get_last_block_timestamp(&self) -> Result<LastBlockTimestamp>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 

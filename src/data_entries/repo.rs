@@ -52,14 +52,13 @@ impl DataEntriesRepo for DataEntriesRepoImpl {
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 
-    fn get_last_block_timestamp(&self) -> Result<Option<LastBlockTimestamp>> {
+    fn get_last_block_timestamp(&self) -> Result<LastBlockTimestamp> {
         blocks_microblocks
             .select(blocks_microblocks::time_stamp)
             .order(blocks_microblocks::uid.desc())
             .filter(blocks_microblocks::time_stamp.is_not_null())
             .first::<Option<i64>>(&self.conn)
-            .optional()
-            .map(|opt_ts| opt_ts.map(|ts| LastBlockTimestamp { time_stamp: ts }))
+            .map(|opt_ts| LastBlockTimestamp { time_stamp: opt_ts })
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 

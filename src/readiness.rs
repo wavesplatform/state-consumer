@@ -26,7 +26,7 @@ pub fn channel(
     let (readiness_tx, readiness_rx) = tokio::sync::mpsc::unbounded_channel();
 
     tokio::spawn(async move {
-        let mut current_mode = SyncMode::Realtime;
+        let mut current_mode = SyncMode::Historical;
         loop {
             tokio::select! {
                 mode = sync_mode_rx.recv() => {
@@ -35,20 +35,27 @@ pub fn channel(
                     }
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-                    let last_block_timestamp = repo.get_last_block_timestamp().unwrap().unwrap();
-                    match last_block_timestamp.time_stamp {
-                        Some(timestamp) => {
-                            let now = chrono::Utc::now().timestamp_millis();
-                            if (now - timestamp) > max_block_age.as_millis() as i64 && current_mode == SyncMode::Realtime {
-                                readiness_tx.send(Readiness::Dead).unwrap();
-                            } else {
-                                readiness_tx.send(Readiness::Ready).unwrap();
+                    match repo.get_last_block_timestamp() {
+                        Ok(last_block_timestamp) => {
+                            match last_block_timestamp.time_stamp {
+                                Some(timestamp) => {
+                                    let now = chrono::Utc::now().timestamp_millis();
+                                    if (now - timestamp) > max_block_age.as_millis() as i64 && current_mode == SyncMode::Realtime {
+                                        readiness_tx.send(Readiness::Dead).unwrap();
+                                    } else {
+                                        readiness_tx.send(Readiness::Ready).unwrap();
+                                    }
+                                },
+                                None => {
+                                    error!("Could not get last block timestamp");
+                                    readiness_tx.send(Readiness::Ready).unwrap();
+                                },
                             }
-                        },
-                        None => {
-                            error!("Could not get last block timestmap");
+                        }
+                        Err(err) => {
+                            error!("Error while fetching last block timestamp: {}", err);
                             readiness_tx.send(Readiness::Dead).unwrap();
-                        },
+                        }
                     }
                 }
             }
