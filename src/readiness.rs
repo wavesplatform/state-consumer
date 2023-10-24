@@ -2,60 +2,65 @@ use crate::data_entries::DataEntriesRepo;
 use crate::{data_entries::repo::DataEntriesRepoImpl, SyncMode};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
-use wavesexchange_log::error;
-use wavesexchange_warp::endpoints::liveness::Readiness;
+use tokio::sync::Mutex;
+use wavesexchange_log::{debug, error};
+use wavesexchange_warp::endpoints::Readiness;
+
+const POLL_INTERVAL_SECS: u64 = 60;
 
 pub fn channel(
     repo: Arc<DataEntriesRepoImpl>,
     mut sync_mode_rx: UnboundedReceiver<SyncMode>,
     max_block_age: std::time::Duration,
 ) -> UnboundedReceiver<Readiness> {
-    // здесь нужно:
-    // 1. отслеживать sync_mode_rx и класть последнее состояние в какую-нибудь переменную
-    // 2. запустить поток, который будет:
-    //   - опрашивать репо на предмет last block timestamp
-    //   - сравнивать с now
-    //   - при отставании, большем max_block_age, но только если
-    //     ОДНОВРЕМЕННО с этим текущий режим — SyncMode::Realtime,
-    //     слать в out канал Readiness::Dead
-
-    // после этого продолжать опрашивать блоки, и продолжать слушать sync_mode_rx
-    // если какой-то из параметров перестал удовлетворять условию «мёртвости»,
-    // нужно «оживить» сервис, послав сообщение Readiness::Ready
-
     let (readiness_tx, readiness_rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let sync_mode = Arc::new(Mutex::new(SyncMode::Historical));
+    let sync_mode_clone = sync_mode.clone();
+
     tokio::spawn(async move {
-        let mut current_mode = SyncMode::Historical;
         loop {
-            tokio::select! {
-                mode = sync_mode_rx.recv() => {
-                    if let Some(received_mode) = mode {
-                        current_mode = received_mode;
-                    }
-                }
-                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-                    match repo.get_last_block_timestamp() {
-                        Ok(last_block_timestamp) => {
-                            match last_block_timestamp.time_stamp {
-                                Some(timestamp) => {
-                                    let now = chrono::Utc::now().timestamp_millis();
-                                    if (now - timestamp) > max_block_age.as_millis() as i64 && current_mode == SyncMode::Realtime {
-                                        readiness_tx.send(Readiness::Dead).unwrap();
-                                    } else {
-                                        readiness_tx.send(Readiness::Ready).unwrap();
-                                    }
-                                },
-                                None => {
-                                    error!("Could not get last block timestamp");
-                                    readiness_tx.send(Readiness::Ready).unwrap();
-                                },
+            if let Some(received_mode) = sync_mode_rx.recv().await {
+                let mut current_mode = sync_mode.lock().await;
+                *current_mode = received_mode;
+                debug!("Current mode: {:?}", *current_mode);
+            }
+        }
+    });
+
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
+
+            let current_mode = sync_mode_clone.lock().await;
+
+            match repo.get_last_block_timestamp() {
+                Ok(last_block_timestamp) => {
+                    if let Some(timestamp) = last_block_timestamp.time_stamp {
+                        debug!("Current timestamp: {}", timestamp);
+                        let now = chrono::Utc::now().timestamp_millis();
+                        if (now - timestamp) > max_block_age.as_millis() as i64
+                            && *current_mode == SyncMode::Realtime
+                        {
+                            if readiness_tx.send(Readiness::Dead).is_err() {
+                                error!("Failed to send Dead status");
+                            }
+                        } else {
+                            if readiness_tx.send(Readiness::Ready).is_err() {
+                                error!("Failed to send Ready status");
                             }
                         }
-                        Err(err) => {
-                            error!("Error while fetching last block timestamp: {}", err);
-                            readiness_tx.send(Readiness::Dead).unwrap();
+                    } else {
+                        error!("Could not get last block timestamp");
+                        if readiness_tx.send(Readiness::Ready).is_err() {
+                            error!("Failed to send Ready status");
                         }
+                    }
+                }
+                Err(err) => {
+                    error!("Error while fetching last block timestamp: {}", err);
+                    if readiness_tx.send(Readiness::Dead).is_err() {
+                        error!("Failed to send Dead status");
                     }
                 }
             }

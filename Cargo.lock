@@ -2067,12 +2067,11 @@ dependencies = [
 
 [[package]]
 name = "wavesexchange_warp"
-version = "0.14.7"
-source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.7#da3f4c1f92fecc3d03f11b5008d55cbba07030b0"
+version = "0.14.8"
+source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.8#302c17e2fbd0d6edb81f9b215322a0e919a0fa1f"
 dependencies = [
  "futures",
  "lazy_static",
- "once_cell",
  "prometheus",
  "serde",
  "serde_json",

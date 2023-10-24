@@ -26,6 +26,10 @@ fn default_start_rollback_depth() -> u32 {
     1
 }
 
+fn default_pgpoolsize() -> u32 {
+    4
+}
+
 #[derive(Deserialize, Debug, Clone)]
 struct ConfigFlat {
     #[serde(default = "default_port")]
@@ -40,6 +44,8 @@ struct ConfigFlat {
     pgdatabase: String,
     pguser: String,
     pgpassword: String,
+    #[serde(default = "default_pgpoolsize")]
+    pgpoolsize: u32,
 
     blockchain_updates_url: String,
     #[serde(default = "default_updates_per_request")]
@@ -67,6 +73,7 @@ pub struct PostgresConfig {
     pub database: String,
     pub user: String,
     pub password: String,
+    pub poolsize: u32
 }
 
 pub fn load() -> Result<Config> {
@@ -87,6 +94,7 @@ pub fn load() -> Result<Config> {
             database: config_flat.pgdatabase,
             user: config_flat.pguser,
             password: config_flat.pgpassword,
+            poolsize: config_flat.pgpoolsize
         },
     })
 }

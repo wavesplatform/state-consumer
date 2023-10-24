@@ -15,6 +15,8 @@ use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
+const MAX_BLOCK_AGE: u64 = 600;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SyncMode {
     Historical,
@@ -25,8 +27,7 @@ pub enum SyncMode {
 async fn main() -> Result<()> {
     let config = config::load()?;
 
-    let conn = db::new(&config.postgres)?;
-
+    let conn = db::pool(&config.postgres)?;
     let data_entries_repo = Arc::new(DataEntriesRepoImpl::new(conn));
 
     let updates_repo =
@@ -39,7 +40,7 @@ async fn main() -> Result<()> {
     let readiness_channel = readiness::channel(
         data_entries_repo.clone(),
         sync_mode_rx,
-        std::time::Duration::from_secs(600),
+        std::time::Duration::from_secs(MAX_BLOCK_AGE),
     );
 
     let consumer = data_entries::daemon::start(
