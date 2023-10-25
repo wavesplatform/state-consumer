@@ -14,8 +14,9 @@ use std::sync::Arc;
 use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
+use std::time::Duration;
 
-const MAX_BLOCK_AGE: u64 = 600;
+const MAX_BLOCK_AGE: Duration = Duration::from_secs(600);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SyncMode {
@@ -40,7 +41,7 @@ async fn main() -> Result<()> {
     let readiness_channel = readiness::channel(
         data_entries_repo.clone(),
         sync_mode_rx,
-        std::time::Duration::from_secs(MAX_BLOCK_AGE),
+        MAX_BLOCK_AGE,
     );
 
     let consumer = data_entries::daemon::start(

@@ -27,7 +27,7 @@ fn default_start_rollback_depth() -> u32 {
 }
 
 fn default_pgpoolsize() -> u32 {
-    4
+    2
 }
 
 #[derive(Deserialize, Debug, Clone)]
