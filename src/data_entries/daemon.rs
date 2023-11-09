@@ -11,6 +11,7 @@ use super::{
     DataEntry, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, FRAGMENT_SEPARATOR,
     INTEGER_DESCRIPTOR, STRING_DESCRIPTOR,
 };
+use crate::data_entries::DataEntriesRepoOperations;
 use crate::error::AppError;
 use crate::SyncMode;
 
@@ -26,22 +27,26 @@ struct BlockUidWithDataEntry {
     data_entry: DataEntry,
 }
 
-pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesRepo>(
+pub async fn start<T, U>(
     updates_src: T,
     dbw: Arc<U>,
     updates_per_request: usize,
     max_wait_time_in_secs: u64,
     start_rollback_depth: u32,
     sync_mode_tx: UnboundedSender<SyncMode>,
-) -> Result<()> {
-    let starting_from_height = match dbw.get_handled_height(start_rollback_depth)? {
+) -> Result<()>
+where
+    T: DataEntriesSource + Send + Sync + 'static,
+    U: DataEntriesRepo,
+{
+    let starting_from_height = match dbw.execute(|ops| ops.get_handled_height(start_rollback_depth))? {
         Some(prev_handled_height) => {
             info!(
                 "rollback database to height: {} ",
                 prev_handled_height.height
             );
 
-            dbw.transaction(|| rollback(dbw.clone(), prev_handled_height.uid))?;
+            dbw.transaction(|ops| rollback(ops, prev_handled_height.uid))?;
             prev_handled_height.height as u32 + 1
         }
         None => 1u32,
@@ -74,7 +79,7 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
 
         start = Instant::now();
 
-        dbw.transaction(|| {
+        dbw.transaction(|ops| {
             updates_with_height
                 .updates
                 .into_iter()
@@ -111,15 +116,15 @@ pub async fn start<T: DataEntriesSource + Send + Sync + 'static, U: DataEntriesR
                 .into_iter()
                 .try_fold((), |_, update_item| match update_item {
                     UpdatesItem::Blocks(bs) => {
-                        squash_microblocks(dbw.clone())?;
-                        append_blocks_or_microblocks(dbw.clone(), bs.as_ref())
+                        squash_microblocks(ops)?;
+                        append_blocks_or_microblocks(ops, bs.as_ref())
                     }
                     UpdatesItem::Microblock(mba) => {
-                        append_blocks_or_microblocks(dbw.clone(), &vec![mba.to_owned()])
+                        append_blocks_or_microblocks(ops, &vec![mba.to_owned()])
                     }
                     UpdatesItem::Rollback(sig) => {
-                        let block_uid = dbw.clone().get_block_uid(&sig)?;
-                        rollback(dbw.clone(), block_uid)
+                        let block_uid = ops.get_block_uid(&sig)?;
+                        rollback(ops, block_uid)
                     }
                 })?;
 
@@ -154,7 +159,7 @@ fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Opti
     })
 }
 
-fn rollback<U: DataEntriesRepo>(dbw: Arc<U>, block_uid: i64) -> Result<()> {
+fn rollback<U: DataEntriesRepoOperations>(dbw: &U, block_uid: i64) -> Result<()> {
     let deletes = dbw.rollback_data_entries(&block_uid)?;
 
     let mut grouped_deletes: HashMap<DeletedDataEntry, Vec<DeletedDataEntry>> = HashMap::new();
@@ -174,8 +179,8 @@ fn rollback<U: DataEntriesRepo>(dbw: Arc<U>, block_uid: i64) -> Result<()> {
     dbw.rollback_blocks_microblocks(&block_uid)
 }
 
-fn append_blocks_or_microblocks<U: DataEntriesRepo>(
-    dbw: Arc<U>,
+fn append_blocks_or_microblocks<U: DataEntriesRepoOperations>(
+    dbw: &U,
     appends: &Vec<BlockMicroblockAppend>,
 ) -> Result<()> {
     let block_uids = dbw.insert_blocks_or_microblocks(
@@ -213,8 +218,8 @@ fn append_blocks_or_microblocks<U: DataEntriesRepo>(
     }
 }
 
-fn append_data_entries<U: DataEntriesRepo>(
-    dbw: Arc<U>,
+fn append_data_entries<U: DataEntriesRepoOperations>(
+    dbw: &U,
     updates: Vec<BlockUidWithDataEntry>,
 ) -> Result<()> {
     let next_uid = dbw.get_next_update_uid()?;
@@ -372,7 +377,7 @@ fn split_to_fragments(value: &String) -> Vec<(&str, &str)> {
     types.into_iter().zip(frs).collect()
 }
 
-fn squash_microblocks<U: DataEntriesRepo>(dbw: Arc<U>) -> Result<()> {
+fn squash_microblocks<U: DataEntriesRepoOperations>(dbw: &U) -> Result<()> {
     let total_block_id = dbw.get_total_block_id()?;
 
     match total_block_id {

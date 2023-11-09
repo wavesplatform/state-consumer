@@ -9,7 +9,7 @@ pub mod readiness;
 pub mod schema;
 
 use anyhow::Result;
-use data_entries::{repo::DataEntriesRepoImpl, updates::DataEntriesSourceImpl};
+use data_entries::{repo::PgDataEntriesRepo, updates::DataEntriesSourceImpl};
 use std::sync::Arc;
 use tokio::select;
 use wavesexchange_log::{error, info};
@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     let config = config::load()?;
 
     let conn = db::pool(&config.postgres)?;
-    let data_entries_repo = Arc::new(DataEntriesRepoImpl::new(conn));
+    let data_entries_repo = Arc::new(PgDataEntriesRepo::new(conn));
 
     let updates_repo =
         DataEntriesSourceImpl::new(&config.data_entries.blockchain_updates_url).await?;
