@@ -48,9 +48,11 @@ where
                         if (now - timestamp) > max_block_age.as_millis() as i64
                             && *current_mode == SyncMode::Realtime
                         {
+                            debug!("Sending status: Dead");
                             send(Readiness::Dead);
                         } else {
-                            send(Readiness::Dead);
+                            debug!("Sending status: Ready");
+                            send(Readiness::Ready);
                         }
                     } else {
                         error!("Could not get last block timestamp");
