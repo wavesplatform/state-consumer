@@ -2067,8 +2067,8 @@ dependencies = [
 
 [[package]]
 name = "wavesexchange_warp"
-version = "0.14.8"
-source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.8#302c17e2fbd0d6edb81f9b215322a0e919a0fa1f"
+version = "0.14.9"
+source = "git+https://github.com/waves-exchange/wavesexchange-rs?tag=wavesexchange_warp/0.14.9#1f89140cc3a784ec5a808267f73c6b26624752b3"
 dependencies = [
  "futures",
  "lazy_static",

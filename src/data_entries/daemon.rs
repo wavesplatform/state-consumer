@@ -40,18 +40,18 @@ where
     U: DataEntriesRepo,
 {
     let starting_from_height =
-        match dbw.execute(|ops| ops.get_handled_height(start_rollback_depth))? {
+        dbw.transaction(|ops| match ops.get_handled_height(start_rollback_depth)? {
             Some(prev_handled_height) => {
                 info!(
-                    "rollback database to height: {} ",
+                    "rollback database to height: {}",
                     prev_handled_height.height
                 );
 
-                dbw.transaction(|ops| rollback(ops, prev_handled_height.uid))?;
-                prev_handled_height.height as u32 + 1
+                rollback(ops, prev_handled_height.uid)?;
+                Ok(prev_handled_height.height as u32 + 1)
             }
-            None => 1u32,
-        };
+            None => Ok(1u32),
+        })?;
 
     info!(
         "Fetching block updates from height {}.",

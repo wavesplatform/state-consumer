@@ -16,7 +16,7 @@ use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
-const MAX_BLOCK_AGE: Duration = Duration::from_secs(60);
+const MAX_BLOCK_AGE: Duration = Duration::from_secs(600);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SyncMode {

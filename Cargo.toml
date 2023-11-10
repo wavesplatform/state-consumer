@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 wavesexchange_log = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_log/0.5.1" }
 waves-protobuf-schemas = { git = "https://github.com/wavesplatform/protobuf-schemas", rev = "dc1597077cbf55aac4cd514f5510ba346c45b361" }
 warp = "0.3"
-wavesexchange_warp = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_warp/0.14.8" }
+wavesexchange_warp = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_warp/0.14.9" }
 
 [[bin]]
 name = "service"
