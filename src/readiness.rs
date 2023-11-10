@@ -1,5 +1,5 @@
-use crate::data_entries::DataEntriesRepo;
-use crate::{data_entries::repo::DataEntriesRepoImpl, SyncMode};
+use crate::data_entries::{DataEntriesRepo, DataEntriesRepoOperations};
+use crate::SyncMode;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::Mutex;
@@ -8,11 +8,14 @@ use wavesexchange_warp::endpoints::Readiness;
 
 const POLL_INTERVAL_SECS: u64 = 60;
 
-pub fn channel(
-    repo: Arc<DataEntriesRepoImpl>,
+pub fn channel<U>(
+    repo: Arc<U>,
     mut sync_mode_rx: UnboundedReceiver<SyncMode>,
     max_block_age: std::time::Duration,
-) -> UnboundedReceiver<Readiness> {
+) -> UnboundedReceiver<Readiness>
+where
+    U: DataEntriesRepo + Send + Sync + 'static,
+{
     let (readiness_tx, readiness_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let sync_mode = Arc::new(Mutex::new(SyncMode::Historical));
@@ -36,7 +39,7 @@ pub fn channel(
 
             tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
 
-            match repo.get_last_block_timestamp() {
+            match repo.execute(|ops| ops.get_last_block_timestamp()) {
                 Ok(last_block_timestamp) => {
                     if let Some(timestamp) = last_block_timestamp.time_stamp {
                         debug!("Current timestamp: {}", timestamp);
@@ -45,9 +48,11 @@ pub fn channel(
                         if (now - timestamp) > max_block_age.as_millis() as i64
                             && *current_mode == SyncMode::Realtime
                         {
+                            debug!("Sending status: Dead");
                             send(Readiness::Dead);
                         } else {
-                            send(Readiness::Dead);
+                            debug!("Sending status: Ready");
+                            send(Readiness::Ready);
                         }
                     } else {
                         error!("Could not get last block timestamp");
