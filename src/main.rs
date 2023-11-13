@@ -16,13 +16,7 @@ use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
-const MAX_BLOCK_AGE: Duration = Duration::from_secs(600);
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SyncMode {
-    Historical,
-    Realtime,
-}
+const MAX_BLOCK_AGE: Duration = Duration::from_secs(300);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,10 +30,8 @@ async fn main() -> Result<()> {
 
     info!("Starting state-consumer");
 
-    let (sync_mode_tx, sync_mode_rx) = tokio::sync::mpsc::unbounded_channel();
-
     let readiness_channel =
-        readiness::channel(data_entries_repo.clone(), sync_mode_rx, MAX_BLOCK_AGE);
+        readiness::channel(data_entries_repo.clone(), MAX_BLOCK_AGE);
 
     let consumer = data_entries::daemon::start(
         updates_repo,
@@ -47,7 +39,6 @@ async fn main() -> Result<()> {
         config.data_entries.updates_per_request,
         config.data_entries.max_wait_time_in_secs,
         config.start_rollback_depth,
-        sync_mode_tx,
     );
 
     let metrics = tokio::spawn(async move {
