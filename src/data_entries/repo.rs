@@ -28,7 +28,7 @@ impl PgDataEntriesRepo {
         Self { pool }
     }
 
-    fn get_conn(&self) -> Result<PooledPgConnection> {
+    pub fn get_conn(&self) -> Result<PooledPgConnection> {
         Ok(self.pool.get()?)
     }
 }

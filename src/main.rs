@@ -11,27 +11,24 @@ pub mod schema;
 use anyhow::Result;
 use data_entries::{repo::PgDataEntriesRepo, updates::DataEntriesSourceImpl};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::select;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
-const MAX_BLOCK_AGE: Duration = Duration::from_secs(300);
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = config::load()?;
 
-    let conn = db::pool(&config.postgres)?;
-    let data_entries_repo = Arc::new(PgDataEntriesRepo::new(conn));
+    let pool = db::pool(&config.postgres)?;
+    let data_entries_repo = Arc::new(PgDataEntriesRepo::new(pool));
 
     let updates_repo =
         DataEntriesSourceImpl::new(&config.data_entries.blockchain_updates_url).await?;
 
     info!("Starting state-consumer");
-
     let readiness_channel =
-        readiness::channel(data_entries_repo.clone(), MAX_BLOCK_AGE);
+        readiness::channel(config.postgres);
 
     let consumer = data_entries::daemon::start(
         updates_repo,
