@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use diesel::sql_types::{BigInt, Nullable, Text};
 use diesel::{Insertable, Queryable};
-use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
@@ -213,11 +212,6 @@ pub struct PrevHandledHeight {
     pub height: i32,
 }
 
-#[derive(Debug, Queryable, Serialize)]
-pub struct LastBlockTimestamp {
-    pub time_stamp: Option<i64>,
-}
-
 pub trait DataEntriesRepo {
     type Operations: DataEntriesRepoOperations;
 
@@ -234,8 +228,6 @@ pub trait DataEntriesRepo {
 
 pub trait DataEntriesRepoOperations {
     fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>>;
-
-    fn get_last_block_timestamp(&self) -> Result<LastBlockTimestamp>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
 

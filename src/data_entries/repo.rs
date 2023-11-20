@@ -1,8 +1,9 @@
-pub use super::{DataEntriesRepo, DataEntriesRepoOperations};
 use super::{
-    BlockMicroblock, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry,
-    InsertedDataEntry, LastBlockTimestamp, PrevHandledHeight,
+    BlockMicroblock, DataEntryUpdate, DeletedDataEntry, InsertableDataEntry, InsertedDataEntry,
+    PrevHandledHeight,
 };
+pub use super::{DataEntriesRepo, DataEntriesRepoOperations};
+use crate::db::{PgPool, PooledPgConnection};
 use crate::error::AppError;
 use crate::schema::blocks_microblocks;
 use crate::schema::blocks_microblocks::dsl::*;
@@ -10,14 +11,11 @@ use crate::schema::data_entries;
 use crate::schema::data_entries_history_keys;
 use crate::schema::data_entries_uid_seq;
 use crate::schema::data_entries_uid_seq::dsl::*;
-use crate::db::{PgPool, PooledPgConnection};
 use anyhow::{Error, Result};
 use diesel::prelude::*;
 use diesel::sql_types::{Array, BigInt, VarChar};
 
 const MAX_UID: i64 = std::i64::MAX - 1;
-
-
 
 pub struct PgDataEntriesRepo {
     pool: PgPool,
@@ -70,16 +68,6 @@ impl DataEntriesRepoOperations for PooledPgConnection {
             .order(blocks_microblocks::uid.asc())
             .first(self)
             .optional()
-            .map_err(|err| Error::new(AppError::DbError(err)))
-    }
-
-    fn get_last_block_timestamp(&self) -> Result<LastBlockTimestamp> {
-        blocks_microblocks
-            .select(blocks_microblocks::time_stamp)
-            .order(blocks_microblocks::uid.desc())
-            .filter(blocks_microblocks::time_stamp.is_not_null())
-            .first::<Option<i64>>(self)
-            .map(|opt_ts| LastBlockTimestamp { time_stamp: opt_ts })
             .map_err(|err| Error::new(AppError::DbError(err)))
     }
 
