@@ -5,7 +5,6 @@ pub mod config;
 pub mod data_entries;
 pub mod db;
 pub mod error;
-pub mod readiness;
 pub mod schema;
 
 use anyhow::Result;
@@ -13,11 +12,25 @@ use data_entries::{repo::PgDataEntriesRepo, updates::DataEntriesSourceImpl};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
+use wavesexchange_liveness;
 use wavesexchange_log::{error, info};
 use wavesexchange_warp::MetricsWarpBuilder;
 
 const POLL_INTERVAL_SECS: u64 = 60;
 const MAX_BLOCK_AGE: Duration = Duration::from_secs(300);
+
+impl Into<wavesexchange_liveness::PostgresConfig> for config::PostgresConfig {
+    fn into(self) -> wavesexchange_liveness::PostgresConfig {
+        wavesexchange_liveness::PostgresConfig {
+            host: self.host,
+            port: self.port,
+            database: self.database,
+            user: self.user,
+            password: self.password,
+            poolsize: self.poolsize,
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,7 +43,8 @@ async fn main() -> Result<()> {
         DataEntriesSourceImpl::new(&config.data_entries.blockchain_updates_url).await?;
 
     info!("Starting state-consumer");
-    let readiness_channel = readiness::channel(config.postgres, POLL_INTERVAL_SECS, MAX_BLOCK_AGE);
+    let readiness_channel =
+        wavesexchange_liveness::channel(config.postgres.into(), POLL_INTERVAL_SECS, MAX_BLOCK_AGE);
 
     let consumer = data_entries::daemon::start(
         updates_repo,
