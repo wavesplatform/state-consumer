@@ -6,8 +6,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use wavesexchange_log::{debug, error};
 use wavesexchange_warp::endpoints::Readiness;
 
-const POLL_INTERVAL_SECS: u64 = 60;
-const MAX_BLOCK_AGE: Duration = Duration::from_secs(300);
 const LAST_BLOCK_TIMESTAMP_QUERY: &str = "SELECT time_stamp FROM blocks_microblocks WHERE time_stamp IS NOT NULL ORDER BY uid DESC LIMIT 1";
 
 struct LastBlock {
@@ -51,7 +49,11 @@ fn get_conn(pgconfig: &PostgresConfig) -> Result<PgConnection, diesel::result::C
     PgConnection::establish(&db_url)
 }
 
-pub fn channel(pgconfig: impl Into<PostgresConfig>) -> UnboundedReceiver<Readiness> {
+pub fn channel(
+    pgconfig: impl Into<PostgresConfig>,
+    poll_interval_secs: u64,
+    max_block_age: Duration,
+) -> UnboundedReceiver<Readiness> {
     let pgconfig: PostgresConfig = pgconfig.into();
     let (readiness_tx, readiness_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -68,7 +70,7 @@ pub fn channel(pgconfig: impl Into<PostgresConfig>) -> UnboundedReceiver<Readine
                 }
             };
 
-            tokio::time::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(poll_interval_secs)).await;
 
             match get_conn(&pgconfig) {
                 Ok(conn) => {
@@ -87,7 +89,7 @@ pub fn channel(pgconfig: impl Into<PostgresConfig>) -> UnboundedReceiver<Readine
                                     debug!("Sending status: Ready");
                                     send(Readiness::Ready);
                                 } else {
-                                    if now.duration_since(last_block.last_change) > MAX_BLOCK_AGE {
+                                    if now.duration_since(last_block.last_change) > max_block_age {
                                         debug!("Sending status: Dead");
                                         send(Readiness::Dead);
                                     } else {
