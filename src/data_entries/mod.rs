@@ -213,8 +213,20 @@ pub struct PrevHandledHeight {
 }
 
 pub trait DataEntriesRepo {
-    fn transaction(&self, f: impl FnOnce() -> Result<()>) -> Result<()>;
+    type Operations: DataEntriesRepoOperations;
 
+    /// Execute some operations on a pooled connection without creating a database transaction.
+    fn execute<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(Self::Operations) -> Result<R>;
+
+    /// Execute some operations within a database transaction.
+    fn transaction<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&Self::Operations) -> Result<R>;
+}
+
+pub trait DataEntriesRepoOperations {
     fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>>;
 
     fn get_block_uid(&self, block_id: &str) -> Result<i64>;
