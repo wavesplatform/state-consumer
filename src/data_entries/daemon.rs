@@ -153,7 +153,7 @@ fn extract_integer_fragment(values: &Vec<(&str, &str)>, position: usize) -> Opti
     })
 }
 
-fn rollback<U: DataEntriesRepoOperations>(dbw: &U, block_uid: i64) -> Result<()> {
+fn rollback<U: DataEntriesRepoOperations>(dbw: &mut U, block_uid: i64) -> Result<()> {
     let deletes = dbw.rollback_data_entries(&block_uid)?;
 
     let mut grouped_deletes: HashMap<DeletedDataEntry, Vec<DeletedDataEntry>> = HashMap::new();
@@ -174,7 +174,7 @@ fn rollback<U: DataEntriesRepoOperations>(dbw: &U, block_uid: i64) -> Result<()>
 }
 
 fn append_blocks_or_microblocks<U: DataEntriesRepoOperations>(
-    dbw: &U,
+    dbw: &mut U,
     appends: &Vec<BlockMicroblockAppend>,
 ) -> Result<()> {
     let block_uids = dbw.insert_blocks_or_microblocks(
@@ -206,14 +206,14 @@ fn append_blocks_or_microblocks<U: DataEntriesRepoOperations>(
         .collect_vec();
 
     if data_entries.len() > 0 {
-        append_data_entries(dbw.clone(), data_entries)
+        append_data_entries(dbw, data_entries)
     } else {
         Ok(())
     }
 }
 
 fn append_data_entries<U: DataEntriesRepoOperations>(
-    dbw: &U,
+    dbw: &mut U,
     updates: Vec<BlockUidWithDataEntry>,
 ) -> Result<()> {
     let next_uid = dbw.get_next_update_uid()?;
@@ -371,7 +371,7 @@ fn split_to_fragments(value: &String) -> Vec<(&str, &str)> {
     types.into_iter().zip(frs).collect()
 }
 
-fn squash_microblocks<U: DataEntriesRepoOperations>(dbw: &U) -> Result<()> {
+fn squash_microblocks<U: DataEntriesRepoOperations>(dbw: &mut U) -> Result<()> {
     let total_block_id = dbw.get_total_block_id()?;
 
     match total_block_id {

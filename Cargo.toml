@@ -12,7 +12,7 @@ async-trait = "0.1"
 chrono = { version = "0.4" }
 base64 = "0.12"
 bs58 = "0.3"
-diesel = { version = "1.4", features = ["chrono", "postgres", "r2d2", "chrono", "numeric", "64-column-tables"] }
+diesel = { version = "2.0", features = ["chrono", "postgres", "r2d2", "64-column-tables"] }
 envy = "0.4"
 itertools = "0.9"
 once_cell = "1.4"
@@ -26,7 +26,7 @@ wavesexchange_log = { git = "https://github.com/waves-exchange/wavesexchange-rs"
 waves-protobuf-schemas = { git = "https://github.com/wavesplatform/protobuf-schemas", rev = "dc1597077cbf55aac4cd514f5510ba346c45b361" }
 warp = "0.3"
 wavesexchange_warp = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_warp/0.14.9" }
-wavesexchange_liveness = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_liveness/0.1.0"}
+wavesexchange_liveness = { git = "https://github.com/waves-exchange/wavesexchange-rs", tag = "wavesexchange_liveness/0.2.0"}
 
 [[bin]]
 name = "service"

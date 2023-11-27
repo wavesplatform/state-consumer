@@ -52,7 +52,7 @@ impl Hash for DataEntry {
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]
-#[table_name = "data_entries"]
+#[diesel(table_name = data_entries)]
 pub struct InsertableDataEntry {
     pub block_uid: i64,
     pub transaction_id: String,
@@ -60,10 +60,10 @@ pub struct InsertableDataEntry {
     pub superseded_by: i64,
     pub address: String,
     pub key: String,
-    #[sql_type = "Nullable<Text>"]
+    #[diesel(sql_type = Nullable<Text>)]
     pub value_binary: Option<Vec<u8>>,
     pub value_bool: Option<bool>,
-    #[sql_type = "Nullable<BigInt>"]
+    #[diesel(sql_type = Nullable<BigInt>)]
     pub value_integer: Option<i64>,
     pub value_string: Option<String>,
     pub fragment_0_integer: Option<i64>,
@@ -128,7 +128,7 @@ impl Hash for InsertableDataEntry {
 }
 
 #[derive(Clone, Debug, Insertable)]
-#[table_name = "data_entries"]
+#[diesel(table_name = data_entries)]
 pub struct DataEntryUpdate {
     pub superseded_by: i64,
     pub address: String,
@@ -142,7 +142,7 @@ pub struct DeletedDataEntry {
     pub key: String,
 }
 #[derive(Clone, Debug, Insertable, QueryableByName)]
-#[table_name = "data_entries_history_keys"]
+#[diesel(table_name = data_entries_history_keys)]
 pub struct InsertedDataEntry {
     pub address: String,
     pub key: String,
@@ -178,7 +178,7 @@ pub trait DataEntriesSource {
 }
 
 #[derive(Clone, Debug, Insertable, QueryableByName)]
-#[table_name = "blocks_microblocks"]
+#[diesel(table_name = blocks_microblocks)]
 pub struct BlockMicroblock {
     pub id: String,
     pub time_stamp: Option<i64>,
@@ -223,37 +223,37 @@ pub trait DataEntriesRepo {
     /// Execute some operations within a database transaction.
     fn transaction<F, R>(&self, f: F) -> Result<R>
     where
-        F: FnOnce(&Self::Operations) -> Result<R>;
+        F: FnOnce(&mut Self::Operations) -> Result<R>;
 }
 
 pub trait DataEntriesRepoOperations {
-    fn get_handled_height(&self, depth: u32) -> Result<Option<PrevHandledHeight>>;
+    fn get_handled_height(&mut self, depth: u32) -> Result<Option<PrevHandledHeight>>;
 
-    fn get_block_uid(&self, block_id: &str) -> Result<i64>;
+    fn get_block_uid(&mut self, block_id: &str) -> Result<i64>;
 
-    fn get_key_block_uid(&self) -> Result<i64>;
+    fn get_key_block_uid(&mut self) -> Result<i64>;
 
-    fn get_total_block_id(&self) -> Result<Option<String>>;
+    fn get_total_block_id(&mut self) -> Result<Option<String>>;
 
-    fn get_next_update_uid(&self) -> Result<i64>;
+    fn get_next_update_uid(&mut self) -> Result<i64>;
 
-    fn insert_blocks_or_microblocks(&self, blocks: &Vec<BlockMicroblock>) -> Result<Vec<i64>>;
+    fn insert_blocks_or_microblocks(&mut self, blocks: &Vec<BlockMicroblock>) -> Result<Vec<i64>>;
 
-    fn insert_data_entries(&self, entries: &Vec<InsertableDataEntry>) -> Result<()>;
+    fn insert_data_entries(&mut self, entries: &Vec<InsertableDataEntry>) -> Result<()>;
 
-    fn close_superseded_by(&self, updates: &Vec<DataEntryUpdate>) -> Result<()>;
+    fn close_superseded_by(&mut self, updates: &Vec<DataEntryUpdate>) -> Result<()>;
 
-    fn reopen_superseded_by(&self, current_superseded_by: &Vec<i64>) -> Result<()>;
+    fn reopen_superseded_by(&mut self, current_superseded_by: &Vec<i64>) -> Result<()>;
 
-    fn set_next_update_uid(&self, uid: i64) -> Result<()>;
+    fn set_next_update_uid(&mut self, uid: i64) -> Result<()>;
 
-    fn change_block_id(&self, block_uid: &i64, new_block_id: &str) -> Result<()>;
+    fn change_block_id(&mut self, block_uid: &i64, new_block_id: &str) -> Result<()>;
 
-    fn update_data_entries_block_references(&self, block_uid: &i64) -> Result<()>;
+    fn update_data_entries_block_references(&mut self, block_uid: &i64) -> Result<()>;
 
-    fn delete_microblocks(&self) -> Result<()>;
+    fn delete_microblocks(&mut self) -> Result<()>;
 
-    fn rollback_blocks_microblocks(&self, block_uid: &i64) -> Result<()>;
+    fn rollback_blocks_microblocks(&mut self, block_uid: &i64) -> Result<()>;
 
-    fn rollback_data_entries(&self, block_uid: &i64) -> Result<Vec<DeletedDataEntry>>;
+    fn rollback_data_entries(&mut self, block_uid: &i64) -> Result<Vec<DeletedDataEntry>>;
 }

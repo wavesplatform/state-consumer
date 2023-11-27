@@ -9,11 +9,7 @@ pub type PgPool = Pool<ConnectionManager<PgConnection>>;
 pub type PooledPgConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 pub fn pool(config: &PostgresConfig) -> anyhow::Result<PgPool> {
-    let db_url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        config.user, config.password, config.host, config.port, config.database
-    );
-    let manager = ConnectionManager::<PgConnection>::new(db_url);
+    let manager = ConnectionManager::<PgConnection>::new(config.database_url());
     Ok(Pool::builder()
         .max_size(config.poolsize)
         .idle_timeout(Some(Duration::from_secs(300)))
