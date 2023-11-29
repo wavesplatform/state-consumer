@@ -22,6 +22,8 @@ pub enum AppError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("StreamClosed: {0}")]
     StreamClosed(String),
+    #[error("LivenessCheckFailed: {0}")]
+    LivenessCheckFailed(String),
 }
 
 impl Into<String> for AppError {

@@ -1,13 +1,17 @@
-use crate::{config::PostgresConfig, error::AppError};
-use anyhow::{Error, Result};
-use diesel::{Connection, PgConnection};
+use crate::config::PostgresConfig;
 
-// todo max connections
-pub fn new(config: &PostgresConfig) -> Result<PgConnection> {
-    let db_url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        config.user, config.password, config.host, config.port, config.database
-    );
+use diesel::{pg::PgConnection, r2d2::ConnectionManager};
+use r2d2::Pool;
+use r2d2::PooledConnection;
+use std::time::Duration;
 
-    PgConnection::establish(&db_url).map_err(|err| Error::new(AppError::ConnectionError(err)))
+pub type PgPool = Pool<ConnectionManager<PgConnection>>;
+pub type PooledPgConnection = PooledConnection<ConnectionManager<PgConnection>>;
+
+pub fn pool(config: &PostgresConfig) -> anyhow::Result<PgPool> {
+    let manager = ConnectionManager::<PgConnection>::new(config.database_url());
+    Ok(Pool::builder()
+        .max_size(config.poolsize)
+        .idle_timeout(Some(Duration::from_secs(300)))
+        .build(manager)?)
 }
