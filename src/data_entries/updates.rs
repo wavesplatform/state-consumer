@@ -8,17 +8,20 @@ use async_trait::async_trait;
 use std::convert::TryFrom;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use waves_protobuf_schemas::waves::{
-    data_transaction_data::data_entry::Value,
-    events::{
-        blockchain_updated::append::{BlockAppend, Body, MicroBlockAppend},
-        blockchain_updated::Append,
-        blockchain_updated::Update,
-        grpc::{
-            blockchain_updates_api_client::BlockchainUpdatesApiClient, SubscribeEvent,
-            SubscribeRequest,
+use waves_protobuf_schemas::{
+    tonic,
+    waves::{
+        data_entry::Value,
+        events::{
+            blockchain_updated::append::{BlockAppend, Body, MicroBlockAppend},
+            blockchain_updated::Append,
+            blockchain_updated::Update,
+            grpc::{
+                blockchain_updates_api_client::BlockchainUpdatesApiClient, SubscribeEvent,
+                SubscribeRequest,
+            },
+            BlockchainUpdated,
         },
-        BlockchainUpdated,
     },
 };
 
@@ -30,8 +33,12 @@ pub struct DataEntriesSourceImpl {
 impl DataEntriesSourceImpl {
     pub async fn new(blockchain_updates_url: &str) -> Result<Self> {
         Ok(Self {
-            grpc_client: BlockchainUpdatesApiClient::connect(blockchain_updates_url.to_owned())
-                .await?,
+            grpc_client: {
+                const MAX_MSG_SIZE: usize = 8 * 1024 * 1024; // 8 MB instead of the default 4 MB
+                BlockchainUpdatesApiClient::connect(blockchain_updates_url.to_owned())
+                    .await?
+                    .max_decoding_message_size(MAX_MSG_SIZE)
+            },
         })
     }
 

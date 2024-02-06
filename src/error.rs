@@ -1,4 +1,5 @@
 use crate::data_entries::BlockchainUpdatesWithLastHeight;
+use waves_protobuf_schemas::tonic;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
